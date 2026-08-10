@@ -1,0 +1,66 @@
+# Python / mitmproxy environments
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Runtime state (generated per machine)
+runtime/
+mitmproxy/
+backups/
+remote-pairing-backups/
+remote-trust-backups/
+.runtime/
+tmp/
+
+# Certificates, keys and trust snapshots
+*.pem
+*.p12
+*.pfx
+*.cer
+*.crt
+*.key
+*dhparam*
+
+# Logs and databases
+*.log
+*.log.*
+*.gz
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.db
+*.db-*
+
+# Authentication, pairing and local state
+auth.json
+global-state.json
+global-state.json.*
+.codex-global-state.json*
+state_*.json
+state_*.plist
+*.lock
+*.pid
+
+# User-generated configuration and launchd files
+config/codex-proxy.conf
+*.local.conf
+*.local.toml
+*.local.yaml
+*.local.yml
+.env
+.env.*
+*.plist
+!templates/*.plist.in
+
+# Build products
+*.app/
+build/
+dist/
+DerivedData/
+
+# Local editor / OS metadata
+.codex/
+.DS_Store
+.idea/
+.vscode/

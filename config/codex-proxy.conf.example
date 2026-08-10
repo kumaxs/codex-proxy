@@ -1,0 +1,6 @@
+UPSTREAM_PROXY_URL=http://127.0.0.1:7890
+LISTEN_HOST=127.0.0.1
+LISTEN_PORT=29759
+MITMDUMP_PATH=/usr/local/bin/mitmdump
+CHATGPT_APP_PATH=/Applications/ChatGPT.app/Contents/MacOS/ChatGPT
+PASSTHROUGH_REGEX=^(localhost|127\.0\.0\.1|::1)$

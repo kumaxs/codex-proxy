@@ -1,0 +1,19 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-and-build:
+    # Match the project's currently documented validation boundary.
+    runs-on: macos-26
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run offline test suite
+        run: make test
+      - name: Run build validation
+        run: make build

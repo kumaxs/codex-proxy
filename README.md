@@ -2,20 +2,20 @@
 
 ![Codex Proxy 图标](assets/Codex-Proxy-icon-1024.png)
 
-English summary: Codex Proxy is an unofficial macOS utility. It launches ChatGPT with an explicit Chromium `--proxy-server` pointing at the user-supplied HTTP(S) upstream, while the bundled Codex app-server keeps using process-scoped proxy/CA variables through the loopback mitmproxy relay (default `127.0.0.1:29759`). It does not change the system proxy, the official ChatGPT app, or the system CA store.
+English summary: Codex Proxy is an unofficial macOS utility. It applies proxy and CA variables only to an explicitly launched ChatGPT/Codex process, sends that process through a loopback mitmproxy relay (default `127.0.0.1:29759`), and then to a user-supplied HTTP(S) upstream proxy. It does not change the system proxy, the official ChatGPT app, or the system CA store.
 
 > 本项目是社区维护的非官方 macOS 工具，不是 OpenAI、ChatGPT 或 Codex 的官方组件。相关名称和商标归各自权利人所有。
 
 ## 用途与边界
 
-本项目对**显式启动的** ChatGPT 做两条受控代理路径：Chromium/GUI 通过 `--proxy-server` 直接使用用户指定的 HTTP(S) upstream；bundled Codex app-server 继续通过本机 relay 再连接 upstream。relay 默认只监听回环地址 `127.0.0.1:29759`。
+本项目把**显式启动的** ChatGPT/Codex 进程连接到本机 relay，再连接到用户自己指定的 HTTP(S) upstream。默认只监听回环地址，默认端口是 `29759`。
 
 它不会：
 
 - 修改 macOS 系统代理、网络设置、钥匙串或系统 CA 信任库；
 - 修改、注入或替换官方 `ChatGPT.app`；
 - 给 ChatGPT 进程安装 `KeepAlive`、自动重启或守护式循环；
-- 在 relay/upstream 失败时主动另行启动一次普通直连；launcher 没有 direct-launch fallback；Chromium 路径由显式 `--proxy-server` 控制，其他 helper 的实际网络行为仍需业务验证；
+- 在 relay/upstream 失败时主动另行启动一次普通直连；launcher 没有 direct-launch fallback，但 GUI/Chromium 等子进程是否遵守环境变量仍需业务验证；
 - 代替用户向 upstream 提供凭据。`--upstream-url` 禁止 userinfo、路径、查询字符串和片段。
 
 relay 的 LaunchAgent 可以使用 `KeepAlive=true` 维持 relay 服务；这只适用于 relay 进程，不适用于 ChatGPT/Codex。
@@ -26,8 +26,7 @@ relay 的 LaunchAgent 可以使用 `KeepAlive=true` 维持 relay 服务；这只
 flowchart LR
   subgraph P[用户显式启动的进程范围]
     L[Codex Proxy.app 或 launch-codex-proxied.sh] --> C[ChatGPT.app + Codex helper]
-    C -->|Codex app-server：HTTP_PROXY / HTTPS_PROXY<br/>CA 变量；NO_PROXY 仅回环| R[loopback relay<br/>127.0.0.1:29759]
-    C -->|Chromium：--proxy-server| U
+    C -->|HTTP_PROXY / HTTPS_PROXY<br/>CA 变量；NO_PROXY 仅回环<br/>其他代理变量被移除| R[loopback relay<br/>127.0.0.1:29759]
   end
 
   subgraph H[本机服务]
@@ -57,7 +56,7 @@ relay 监听地址只能是 loopback（`127.0.0.1`、`localhost` 或 `::1`）。
 
 - 可用的 macOS `/bin/zsh`、`launchctl`、`curl`、`nc`、`lsof`、`plutil`、`osacompile`、`osadecompile` 和 `codesign`；
 - 已安装且可执行的 `mitmdump`（安装器不会替你下载或安装它）；
-- 已安装的官方 ChatGPT.app，且其 `Contents/MacOS/ChatGPT` 与 `Contents/Resources/codex` 可被校验；
+- 已安装的官方 ChatGPT.app，且其 `Contents/MacOS/ChatGPT` 可执行；bundled Codex 优先识别新版 `Contents/Resources/codex-cli/bin/codex`，同时兼容旧版 `Contents/Resources/codex`；
 - 一个你有权使用的 HTTP 或 HTTPS upstream 代理 URL。
 
 ## 安装
@@ -152,7 +151,7 @@ bin/launch-codex-proxied.sh --config "$CONFIG" --launch-and-verify
 
 | 键 | 含义 |
 | --- | --- |
-| `UPSTREAM_PROXY_URL` | Chromium `--proxy-server` 与 mitmdump 共用的 HTTP(S) upstream authority；禁止 userinfo、路径、查询和片段。 |
+| `UPSTREAM_PROXY_URL` | mitmdump 的 HTTP(S) upstream authority；禁止 userinfo、路径、查询和片段。 |
 | `LISTEN_HOST` | relay loopback 绑定地址。 |
 | `LISTEN_PORT` | relay 监听端口，默认 `29759`。 |
 | `MITMDUMP_PATH` | 已存在且可执行的 mitmdump 绝对路径。 |
@@ -163,13 +162,13 @@ bin/launch-codex-proxied.sh --config "$CONFIG" --launch-and-verify
 
 ## MITM 安全边界与隐私
 
-relay 使用 mitmproxy 的本地 CA 来解密和重新签发**经过 relay 的** HTTPS 流量，因此 relay 进程及其运行目录可能看到这些流量的明文。Chromium/GUI 的显式代理路径直接连接 upstream，不经过本地 MITM relay。请只在你有权审计的设备和网络中运行，不要把 runtime CA 发给他人。
+relay 使用 mitmproxy 的本地 CA 来解密和重新签发 HTTPS 流量，因此 relay 进程及其运行目录对**经过拦截的明文**具有可见性；这包括可能的会话内容、Remote 控制流量或图片请求元数据。请只在你有权审计的设备和网络中运行，不要把 runtime CA 发给他人。
 
-launcher 会验证 ChatGPT 主进程带有预期的 Chromium `--proxy-server` 参数，并验证主进程/Codex app-server 的代理环境及关键 TCP socket。它不覆盖 UDP/QUIC，也不能穷尽所有 Chromium helper 的网络活动，所以 Remote、图片和其他业务链路仍需真实业务实测。
+launcher 会验证 ChatGPT 主进程和它直接启动的 Codex app-server 环境，并多轮采样关键 TCP socket。进程生命周期只管理当前 ChatGPT 主进程的后代；新版桌面端由独立长期 daemon 持有的 bundle helper 不会被误判成 GUI 残留，也不会阻塞代理重启。检查不覆盖 UDP/QUIC，也不能穷尽所有 GUI/Chromium helper 的网络活动，所以 Remote、图片和其他业务链路仍需真实业务实测。
 
 如果进程已经启动、但 postflight 随后失败，launcher 会返回非零并明确提示“状态未验证”；为避免再次出现自动终止/重启循环，它不会擅自发送 TERM。此时应用可能仍在运行，必须由用户手动退出后再重试；“没有 direct-launch fallback”不等于对残留进程实施了网络沙箱。
 
-本项目不把 CA 写入系统钥匙串，也不修改系统信任库；launcher 给 Chromium 增加 `--proxy-server=<UPSTREAM_PROXY_URL>`，同时继续把 `HTTP_PROXY`/`HTTPS_PROXY`、`CODEX_CA_CERTIFICATE`、`SSL_CERT_FILE`、`NODE_EXTRA_CA_CERTS` 和 loopback `NO_PROXY` 注入本次启动的进程。`ALL_PROXY`、SOCKS/WS/FTP 及常见 Git/npm 代理覆盖变量会被移除。请按 [SECURITY.md](SECURITY.md) 管理 runtime 权限、日志和报告敏感问题。
+本项目不把 CA 写入系统钥匙串，也不修改系统信任库；launcher 会把 `HTTP_PROXY`/`HTTPS_PROXY`、`CODEX_CA_CERTIFICATE`、`SSL_CERT_FILE`、`NODE_EXTRA_CA_CERTS` 和 loopback `NO_PROXY` 注入 ChatGPT 主进程。新版桌面端可能在生成 Codex app-server 时移除 `NODE_EXTRA_CA_CERTS`，因此 app-server 校验要求其余代理与 CA 变量保持正确，但不再强制这一项。`ALL_PROXY`、SOCKS/WS/FTP 及常见 Git/npm 代理覆盖变量仍会被拒绝。请按 [SECURITY.md](SECURITY.md) 管理 runtime 权限、日志和报告敏感问题。
 
 ## 官方资料
 

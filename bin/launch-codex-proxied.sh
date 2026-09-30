@@ -17,6 +17,7 @@ if [[ "${CODEX_PROXY_LAUNCHER_TEST_MODE:-0}" == "1" ]]; then
   fi
   readonly TEST_MODE=1
   readonly TEST_PROCESS_TABLE="${CODEX_PROXY_TEST_PROCESS_TABLE:-}"
+  readonly TEST_PARENT_TABLE="${CODEX_PROXY_TEST_PARENT_TABLE:-}"
   readonly TEST_SOCKET_TABLE="${CODEX_PROXY_TEST_SOCKET_TABLE:-}"
   readonly TEST_DRY_RUN="${CODEX_PROXY_TEST_DRY_RUN:-0}"
   readonly TEST_TERM_LOG="${CODEX_PROXY_TEST_TERM_LOG:-/private/tmp/codex-proxy-test-term.log}"
@@ -25,6 +26,7 @@ if [[ "${CODEX_PROXY_LAUNCHER_TEST_MODE:-0}" == "1" ]]; then
 else
   readonly TEST_MODE=0
   readonly TEST_PROCESS_TABLE=""
+  readonly TEST_PARENT_TABLE=""
   readonly TEST_SOCKET_TABLE=""
   readonly TEST_DRY_RUN=0
   readonly TEST_TERM_LOG=""
@@ -100,7 +102,20 @@ is_app_server_command() {
   is_bundle_command "$command_line" && [[ " $command_line " == *" app-server "* ]]
 }
 
-all_target_processes() {
+parent_pid_for_pid() {
+  local pid="$1"
+  local parent_pid
+  if (( TEST_MODE == 1 )); then
+    [[ -n "$TEST_PARENT_TABLE" && -r "$TEST_PARENT_TABLE" ]] || return 1
+    parent_pid="$(/usr/bin/awk -v wanted="$pid" '$1 == wanted && $2 ~ /^[0-9]+$/ { print $2; exit }' "$TEST_PARENT_TABLE")"
+  else
+    parent_pid="$(/bin/ps -p "$pid" -o ppid= 2>/dev/null | /usr/bin/tr -d '[:space:]')" || return 1
+  fi
+  [[ "$parent_pid" == <-> ]] || return 1
+  print -r -- "$parent_pid"
+}
+
+all_bundle_processes() {
   local source_table
   if (( TEST_MODE == 1 )); then
     source_table="$TEST_PROCESS_TABLE"
@@ -124,6 +139,49 @@ all_target_processes() {
       }
     '
   fi
+}
+
+pid_descends_from_main() {
+  local pid="$1"
+  local main_pid="$2"
+  local current="$pid"
+  local parent=""
+  local depth=0
+  [[ "$pid" == <-> && "$main_pid" == <-> ]] || return 1
+  while (( depth < 128 )); do
+    [[ "$current" == "$main_pid" ]] && return 0
+    parent="$(parent_pid_for_pid "$current" 2>/dev/null)" || return 1
+    [[ "$parent" != "$current" && "$parent" != "0" ]] || return 1
+    current="$parent"
+    (( depth += 1 ))
+  done
+  return 1
+}
+
+all_target_processes() {
+  local snapshot record pid base_command main_pid
+  local -a main_pids=()
+  snapshot="$(all_bundle_processes)" || return $?
+
+  while IFS= read -r record; do
+    [[ -n "$record" ]] || continue
+    pid="$(parse_pid "$record")"
+    base_command="$(parse_command "$record")"
+    is_main_command "$base_command" && main_pids+=("$pid")
+  done <<< "$snapshot"
+
+  (( ${#main_pids[@]} > 0 )) || return 0
+
+  while IFS= read -r record; do
+    [[ -n "$record" ]] || continue
+    pid="$(parse_pid "$record")"
+    for main_pid in "${main_pids[@]}"; do
+      if pid_descends_from_main "$pid" "$main_pid"; then
+        print -r -- "$record"
+        break
+      fi
+    done
+  done <<< "$snapshot"
 }
 
 base_command_for_pid() {
@@ -243,11 +301,15 @@ command_has_env_key() {
 
 process_has_required_env() {
   local command_line="$1"
+  local role="${2:-main}"
   local item key expected actual forbidden_key
 
   for item in "${REQUIRED_ENVS[@]}"; do
     key="${item%%=*}"
     expected="${item#*=}"
+    if [[ "$role" == "app-server" && "$key" == "NODE_EXTRA_CA_CERTS" ]]; then
+      continue
+    fi
     command_has_exact_env "$command_line" "$key" "$expected" || return 1
   done
   for forbidden_key in "${FORBIDDEN_PROXY_ENVS[@]}"; do
@@ -322,7 +384,7 @@ list_processes() {
 
     if [[ "$role" == "helper" ]]; then
       env_state="not-checked"
-    elif process_has_required_env "$env_command"; then
+    elif process_has_required_env "$env_command" "$role"; then
       env_state="env-ok"
     else
       env_state="env-bad"
@@ -353,7 +415,6 @@ verify_process_sockets() {
   local pid="$1"
   local role="$2"
   local require_relay="$3"
-  local allow_upstream="$4"
   local round line remote
   local found_relay=0
   local found_established=0
@@ -389,7 +450,7 @@ verify_process_sockets() {
     fi
   done
 
-  if (( forbidden_upstream == 1 && allow_upstream == 0 )); then
+  if (( forbidden_upstream == 1 )); then
     log_error "${role} PID ${pid}: direct connection to upstream port ${UPSTREAM_PORT} is forbidden."
     return 1
   fi
@@ -449,26 +510,20 @@ verify_current() {
     return 1
   }
 
-  base_command="$(base_command_for_pid "${main_pids[1]}")"
-  if [[ " $base_command " != *" --proxy-server=${BROWSER_PROXY_URL} "* ]]; then
-    log_error "ChatGPT main process is missing the required Chromium proxy argument."
-    return 1
-  fi
-
   env_command="$(environment_command_for_pid "${main_pids[1]}")"
-  if ! process_has_required_env "$env_command"; then
+  if ! process_has_required_env "$env_command" "main"; then
     log_error "ChatGPT main process environment does not exactly match the scoped proxy policy."
     return 1
   fi
 
   env_command="$(environment_command_for_pid "${app_server_pids[1]}")"
-  if ! process_has_required_env "$env_command"; then
-    log_error "Codex app-server environment does not exactly match the scoped proxy policy."
+  if ! process_has_required_env "$env_command" "app-server"; then
+    log_error "Codex app-server environment does not match the scoped proxy policy."
     return 1
   fi
 
-  verify_process_sockets "${main_pids[1]}" "ChatGPT main" 0 1 || return 1
-  verify_process_sockets "${app_server_pids[1]}" "Codex app-server" 1 0 || return 1
+  verify_process_sockets "${main_pids[1]}" "ChatGPT main" 0 || return 1
+  verify_process_sockets "${app_server_pids[1]}" "Codex app-server" 1 || return 1
 
   [[ "$(process_identity_for_pid "${main_pids[1]}" 2>/dev/null)" == "$main_identity" ]] || {
     log_error "ChatGPT main process identity changed during verification."
@@ -699,7 +754,7 @@ launch_chatgpt() {
     NODE_EXTRA_CA_CERTS="$RELAY_CA" \
     NO_PROXY="$NO_PROXY_VALUE" \
     no_proxy="$NO_PROXY_VALUE" \
-    "$CHATGPT_EXECUTABLE" "--proxy-server=$BROWSER_PROXY_URL" >> "$LAUNCHER_LOG" 2>&1 </dev/null &
+    "$CHATGPT_EXECUTABLE" >> "$LAUNCHER_LOG" 2>&1 </dev/null &
 }
 
 preflight() {
@@ -796,7 +851,6 @@ init_runtime() {
   RELAY_BIND_HOST="${CODEX_PROXY_LISTEN_HOST_FOR_BIND}"
   UPSTREAM_HOST="$CODEX_PROXY_UPSTREAM_HOST"
   UPSTREAM_PORT="$CODEX_PROXY_UPSTREAM_PORT"
-  BROWSER_PROXY_URL="$CODEX_PROXY_UPSTREAM_PROXY_URL"
   START_RELAY="$CODEX_PROXY_BIN_DIR/start-relay.sh"
   PROXY_HEALTH="$CODEX_PROXY_BIN_DIR/proxy-health.sh"
   ROTATE_LOG="$CODEX_PROXY_BIN_DIR/rotate-launcher-log.sh"

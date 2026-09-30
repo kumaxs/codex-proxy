@@ -24,7 +24,7 @@ CONFIG="$RUNTIME/config/codex-proxy.conf"
 
 - upstream 只能是 `http://` 或 `https://`，不能有 `user:password@`、路径、查询字符串或片段；
 - `--mitmdump` 必须是绝对路径、可执行文件，且其路径链不能是不安全 symlink；
-- `--chatgpt-app-path` 必须指向 `.../Contents/MacOS/ChatGPT`，并且旁边存在 `Contents/Resources/codex`；
+- `--chatgpt-app-path` 必须指向 `.../Contents/MacOS/ChatGPT`；bundled Codex 支持新版 `Contents/Resources/codex-cli/bin/codex`，并兼容旧版 `Contents/Resources/codex`；
 - `--listen-host` 只能是 loopback；端口必须为 1–65535；
 - `--passthrough` 必须是有效的扩展正则。
 
@@ -86,7 +86,7 @@ bin/proxy-health.sh --config "$CONFIG" --http-only
 bin/launch-codex-proxied.sh --config "$CONFIG" --preflight
 ```
 
-launcher 会为本次进程设置 `CODEX_CA_CERTIFICATE`、`SSL_CERT_FILE` 和 `NODE_EXTRA_CA_CERTS`，同时设置 HTTP(S) proxy，并移除 `ALL_PROXY`、SOCKS/WS/FTP 及常见 Git/npm 代理覆盖变量。项目不会把该 CA 安装到系统钥匙串或系统信任库；不要通过修改系统 CA 来“修复”此错误。
+launcher 会为 ChatGPT 主进程设置 `CODEX_CA_CERTIFICATE`、`SSL_CERT_FILE` 和 `NODE_EXTRA_CA_CERTS`，同时设置 HTTP(S) proxy，并移除 `ALL_PROXY`、SOCKS/WS/FTP 及常见 Git/npm 代理覆盖变量。当前桌面端生成的 Codex app-server 可能不保留 `NODE_EXTRA_CA_CERTS`；只要 `CODEX_CA_CERTIFICATE`、`SSL_CERT_FILE` 与 HTTP(S) proxy 正确且 socket 仍指向 relay，这不再判为故障。项目不会把该 CA 安装到系统钥匙串或系统信任库；不要通过修改系统 CA 来“修复”此错误。
 
 ## 5. Responses 出现 `retry 5/5` 或 WebSocket 断开
 

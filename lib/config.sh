@@ -302,6 +302,27 @@ codex_proxy_validate_file() {
   return 0
 }
 
+codex_proxy_resolve_bundled_codex() {
+  local chatgpt_exec="$1"
+  local contents_root="${chatgpt_exec%/MacOS/ChatGPT}"
+  local candidate
+  local -a candidates=(
+    "${contents_root}/Resources/codex-cli/bin/codex"
+    "${contents_root}/Resources/codex"
+  )
+
+  for candidate in "${candidates[@]}"; do
+    if codex_proxy_validate_path_chain "$candidate" &&
+        [[ -f "$candidate" && -x "$candidate" ]]; then
+      print -r -- "$candidate"
+      return 0
+    fi
+  done
+
+  print -u2 "Config parser: no supported bundled Codex CLI found under '${contents_root}/Resources'."
+  return 1
+}
+
 codex_proxy_validate_chatgpt_path() {
   local value="$1"
   if [[ "${value:t}" != "ChatGPT" ]]; then
@@ -319,12 +340,9 @@ codex_proxy_validate_chatgpt_path() {
     return 1
   fi
 
-  local codex_helper="${value%/MacOS/ChatGPT}/Resources/codex"
-  if ! codex_proxy_validate_path_chain "$codex_helper" ||
-      [[ ! -f "$codex_helper" || ! -x "$codex_helper" ]]; then
-    print -u2 "Config parser: Codex helper path is unsafe, missing, or not executable: '$codex_helper'."
-    return 1
-  fi
+  local codex_helper
+  codex_helper="$(codex_proxy_resolve_bundled_codex "$value")" || return 1
+  [[ -n "$codex_helper" ]] || return 1
   return 0
 }
 

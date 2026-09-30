@@ -26,7 +26,8 @@ relay 的 LaunchAgent 可以使用 `KeepAlive=true` 维持 relay 服务；这只
 flowchart LR
   subgraph P[用户显式启动的进程范围]
     L[Codex Proxy.app 或 launch-codex-proxied.sh] --> C[ChatGPT.app + Codex helper]
-    C -->|Codex app-server：HTTP_PROXY / HTTPS_PROXY<br/>CA 变量；NO_PROXY 仅回环| R[loopback relay<br/>127.0.0.1:29759]\n    C -->|Chromium：--proxy-server| U
+    C -->|Codex app-server：HTTP_PROXY / HTTPS_PROXY<br/>CA 变量；NO_PROXY 仅回环| R[loopback relay<br/>127.0.0.1:29759]
+    C -->|Chromium：--proxy-server| U
   end
 
   subgraph H[本机服务]

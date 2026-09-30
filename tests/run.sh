@@ -869,14 +869,15 @@ run_install_and_uninstall_suite() {
 }
 
 run_launcher_fixture_suite() {
-  local fixture_root cfg_file process_table socket_table runtime_home chatgpt_root chatgpt_exec
+  local fixture_root cfg_file process_table parent_table socket_table runtime_home chatgpt_root chatgpt_exec
   local relay_ca cfg_port cfg_host upstream_port lock_dir output_file
-  local app_server_cmd relay_port
+  local app_server_cmd relay_port detached_helper
 
   fixture_root="$(make_tmpdir)"
   add_temp_path "$fixture_root"
   cfg_file="${fixture_root}/config/codex-proxy.conf"
   process_table="${fixture_root}/process-table.tsv"
+  parent_table="${fixture_root}/parent-table.tsv"
   socket_table="${fixture_root}/socket-table.tsv"
   lock_dir="${fixture_root}/launch-lock"
   runtime_home="${fixture_root}/Library/Application Support/Codex Proxy"
@@ -888,20 +889,26 @@ run_launcher_fixture_suite() {
   upstream_port="29758"
   relay_port="$cfg_port"
 
-  /bin/mkdir -p "${chatgpt_exec:h}/Resources" "${chatgpt_root}/Contents/Resources" "${runtime_home}/config" \
+  /bin/mkdir -p "${chatgpt_exec:h}" "${chatgpt_root}/Contents/Resources/codex-cli/bin" \
+    "${chatgpt_root}/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS" \
+    "${chatgpt_root}/Contents/Resources/cua_node/bin" "${runtime_home}/config" \
     "${runtime_home}/mitmproxy" "${runtime_home}/bin" "${fixture_root}/bin" "${fixture_root}/lib" "${fixture_root}/config"
   /bin/mkdir -p "$runtime_home/bin"
   /bin/chmod 700 "$runtime_home"
-  /usr/bin/touch "$chatgpt_exec" "${chatgpt_root}/Contents/Resources/codex" \
-    "${chatgpt_root}/Contents/Resources/codex app-server" "$relay_ca" \
+  /usr/bin/touch "$chatgpt_exec" "${chatgpt_root}/Contents/Resources/codex-cli/bin/codex" \
+    "${chatgpt_root}/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex" \
+    "${chatgpt_root}/Contents/Resources/cua_node/bin/node" "$relay_ca" \
     "$runtime_home/bin/mitmdump" "$cfg_file"
-  /bin/chmod +x "$chatgpt_exec" "${chatgpt_root}/Contents/Resources/codex" "$runtime_home/bin/mitmdump"
+  /bin/chmod +x "$chatgpt_exec" "${chatgpt_root}/Contents/Resources/codex-cli/bin/codex" \
+    "${chatgpt_root}/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex" \
+    "${chatgpt_root}/Contents/Resources/cua_node/bin/node" "$runtime_home/bin/mitmdump"
 
   /bin/cp -f "$PROJECT_ROOT/lib/config.sh" "$fixture_root/lib/"
   /bin/cp -f "$PROJECT_ROOT/bin/launch-codex-proxied.sh" "$fixture_root/bin/"
   /bin/chmod +x "${fixture_root}/bin/launch-codex-proxied.sh"
 
-  app_server_cmd="${chatgpt_root}/Contents/Resources/codex app-server"
+  app_server_cmd="${chatgpt_root}/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex app-server"
+  detached_helper="${chatgpt_root}/Contents/Resources/cua_node/bin/node detached-helper"
   /bin/cat > "$cfg_file" <<EOF_CFG
 UPSTREAM_PROXY_URL=http://${cfg_host}:${upstream_port}
 LISTEN_HOST=${cfg_host}
@@ -914,9 +921,16 @@ EOF_CFG
   /bin/cat > "$process_table" <<EOF_PROC
 111	${chatgpt_exec} HTTP_PROXY=http://127.0.0.1:${cfg_port} HTTPS_PROXY=http://127.0.0.1:${cfg_port} http_proxy=http://127.0.0.1:${cfg_port} https_proxy=http://127.0.0.1:${cfg_port} CODEX_CA_CERTIFICATE=${relay_ca} SSL_CERT_FILE=${relay_ca} NODE_EXTRA_CA_CERTS=${relay_ca} NO_PROXY=localhost,127.0.0.1,::1 no_proxy=localhost,127.0.0.1,::1
 222	${app_server_cmd} HTTP_PROXY=http://127.0.0.1:${cfg_port} HTTPS_PROXY=http://127.0.0.1:${cfg_port} http_proxy=http://127.0.0.1:${cfg_port} https_proxy=http://127.0.0.1:${cfg_port} CODEX_CA_CERTIFICATE=${relay_ca} SSL_CERT_FILE=${relay_ca} NODE_EXTRA_CA_CERTS=${relay_ca} NO_PROXY=localhost,127.0.0.1,::1 no_proxy=localhost,127.0.0.1,::1
+333	${detached_helper}
 EOF_PROC
+  /bin/cat > "$parent_table" <<EOF_PARENT
+111 1
+222 111
+333 999
+999 1
+EOF_PARENT
   /bin/cat > "$socket_table" <<EOF_SOCK
-222	${chatgpt_root}/Contents/Resources/codex app-server -> 127.0.0.1:${cfg_port}
+222	${chatgpt_root}/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex app-server -> 127.0.0.1:${cfg_port}
 EOF_SOCK
 
   output_file="$(make_tmpfile)"
@@ -924,6 +938,7 @@ EOF_SOCK
   if ! CODEX_PROXY_HOME="$runtime_home" \
       CODEX_PROXY_LAUNCHER_TEST_MODE=1 \
       CODEX_PROXY_TEST_PROCESS_TABLE="$process_table" \
+      CODEX_PROXY_TEST_PARENT_TABLE="$parent_table" \
       CODEX_PROXY_TEST_SOCKET_TABLE="$socket_table" \
       CODEX_PROXY_TEST_DRY_RUN=1 \
       CODEX_PROXY_TEST_LOCK_DIR="$lock_dir" \
@@ -934,12 +949,40 @@ EOF_SOCK
   fi
   /bin/rm -f "$fixture_root/verify-current.ok"
 
+  /usr/bin/printf '333\t%s\n' "$detached_helper" > "$fixture_root/detached-only.tsv"
+  detached_state="$(CODEX_PROXY_HOME="$runtime_home" \
+    CODEX_PROXY_LAUNCHER_TEST_MODE=1 \
+    CODEX_PROXY_TEST_PROCESS_TABLE="$fixture_root/detached-only.tsv" \
+    CODEX_PROXY_TEST_PARENT_TABLE="$parent_table" \
+    CODEX_PROXY_TEST_SOCKET_TABLE="$socket_table" \
+    CODEX_PROXY_TEST_DRY_RUN=1 \
+    CODEX_PROXY_TEST_LOCK_DIR="$lock_dir" \
+    /bin/zsh "$fixture_root/bin/launch-codex-proxied.sh" --config "$cfg_file" --process-state 2>/dev/null)"
+  if [[ "$detached_state" != "absent" ]]; then
+    print_fail "launcher TEST_MODE should ignore detached bundle helper after ChatGPT main exits"
+    return 1
+  fi
+
+  /usr/bin/awk 'BEGIN{OFS="\\t"} $1==222 { gsub(/ NODE_EXTRA_CA_CERTS=[^ ]+/, "", $0) } { print }' "$process_table" > "$fixture_root/app-server-without-node-ca.tsv"
+  if ! CODEX_PROXY_HOME="$runtime_home" \
+      CODEX_PROXY_LAUNCHER_TEST_MODE=1 \
+      CODEX_PROXY_TEST_PROCESS_TABLE="$fixture_root/app-server-without-node-ca.tsv" \
+      CODEX_PROXY_TEST_PARENT_TABLE="$parent_table" \
+      CODEX_PROXY_TEST_SOCKET_TABLE="$socket_table" \
+      CODEX_PROXY_TEST_DRY_RUN=1 \
+      CODEX_PROXY_TEST_LOCK_DIR="$lock_dir" \
+      /bin/zsh "$fixture_root/bin/launch-codex-proxied.sh" --config "$cfg_file" --verify-current >/dev/null 2>&1; then
+    print_fail "launcher TEST_MODE should allow app-server to omit NODE_EXTRA_CA_CERTS"
+    return 1
+  fi
+
   /bin/cat > "$socket_table" <<EOF_SOCK
-222	${chatgpt_root}/Contents/Resources/codex app-server -> 127.0.0.1:${upstream_port}
+222	${chatgpt_root}/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex app-server -> 127.0.0.1:${upstream_port}
 EOF_SOCK
   if CODEX_PROXY_HOME="$runtime_home" \
       CODEX_PROXY_LAUNCHER_TEST_MODE=1 \
       CODEX_PROXY_TEST_PROCESS_TABLE="$process_table" \
+      CODEX_PROXY_TEST_PARENT_TABLE="$parent_table" \
       CODEX_PROXY_TEST_SOCKET_TABLE="$socket_table" \
       CODEX_PROXY_TEST_DRY_RUN=1 \
       CODEX_PROXY_TEST_LOCK_DIR="$lock_dir" \
@@ -949,11 +992,12 @@ EOF_SOCK
   fi
 
   /bin/cat > "$socket_table" <<EOF_SOCK
-222	${chatgpt_root}/Contents/Resources/codex app-server -> 8.8.8.8:443
+222	${chatgpt_root}/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex app-server -> 8.8.8.8:443
 EOF_SOCK
   if CODEX_PROXY_HOME="$runtime_home" \
       CODEX_PROXY_LAUNCHER_TEST_MODE=1 \
       CODEX_PROXY_TEST_PROCESS_TABLE="$process_table" \
+      CODEX_PROXY_TEST_PARENT_TABLE="$parent_table" \
       CODEX_PROXY_TEST_SOCKET_TABLE="$socket_table" \
       CODEX_PROXY_TEST_DRY_RUN=1 \
       CODEX_PROXY_TEST_LOCK_DIR="$lock_dir" \
@@ -964,11 +1008,12 @@ EOF_SOCK
 
   /bin/cat > "$socket_table" <<EOF_SOCK
 111	${chatgpt_exec} -> 8.8.8.8:443
-222	${chatgpt_root}/Contents/Resources/codex app-server -> 127.0.0.1:${cfg_port}
+222	${chatgpt_root}/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex app-server -> 127.0.0.1:${cfg_port}
 EOF_SOCK
   if CODEX_PROXY_HOME="$runtime_home" \
       CODEX_PROXY_LAUNCHER_TEST_MODE=1 \
       CODEX_PROXY_TEST_PROCESS_TABLE="$process_table" \
+      CODEX_PROXY_TEST_PARENT_TABLE="$parent_table" \
       CODEX_PROXY_TEST_SOCKET_TABLE="$socket_table" \
       CODEX_PROXY_TEST_DRY_RUN=1 \
       CODEX_PROXY_TEST_LOCK_DIR="$lock_dir" \
@@ -978,7 +1023,7 @@ EOF_SOCK
   fi
 
   /bin/cat > "$socket_table" <<EOF_SOCK
-222	${chatgpt_root}/Contents/Resources/codex app-server -> 127.0.0.1:${cfg_port}
+222	${chatgpt_root}/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex app-server -> 127.0.0.1:${cfg_port}
 EOF_SOCK
 
   /usr/bin/sed -e 's/HTTPS_PROXY=[^ ]* / /' "$process_table" > "$fixture_root/launcher-bad-env.tsv"
@@ -986,6 +1031,7 @@ EOF_SOCK
   if CODEX_PROXY_HOME="$runtime_home" \
       CODEX_PROXY_LAUNCHER_TEST_MODE=1 \
       CODEX_PROXY_TEST_PROCESS_TABLE="$process_table" \
+      CODEX_PROXY_TEST_PARENT_TABLE="$parent_table" \
       CODEX_PROXY_TEST_SOCKET_TABLE="$socket_table" \
       CODEX_PROXY_TEST_DRY_RUN=1 \
       CODEX_PROXY_TEST_LOCK_DIR="$lock_dir" \
@@ -999,6 +1045,7 @@ EOF_SOCK
   if CODEX_PROXY_HOME="$runtime_home" \
       CODEX_PROXY_LAUNCHER_TEST_MODE=1 \
       CODEX_PROXY_TEST_PROCESS_TABLE="$process_table" \
+      CODEX_PROXY_TEST_PARENT_TABLE="$parent_table" \
       CODEX_PROXY_TEST_SOCKET_TABLE="$socket_table" \
       CODEX_PROXY_TEST_DRY_RUN=1 \
       CODEX_PROXY_TEST_LOCK_DIR="$lock_dir" \
@@ -1014,6 +1061,7 @@ EOF_PROC
   if CODEX_PROXY_HOME="$runtime_home" \
       CODEX_PROXY_LAUNCHER_TEST_MODE=1 \
       CODEX_PROXY_TEST_PROCESS_TABLE="$process_table" \
+      CODEX_PROXY_TEST_PARENT_TABLE="$parent_table" \
       CODEX_PROXY_TEST_SOCKET_TABLE="$socket_table" \
       CODEX_PROXY_TEST_DRY_RUN=1 \
       CODEX_PROXY_TEST_LOCK_DIR="$lock_dir" \
@@ -1029,6 +1077,7 @@ EOF_PROC
   if CODEX_PROXY_HOME="$runtime_home" \
       CODEX_PROXY_LAUNCHER_TEST_MODE=1 \
       CODEX_PROXY_TEST_PROCESS_TABLE="$process_table" \
+      CODEX_PROXY_TEST_PARENT_TABLE="$parent_table" \
       CODEX_PROXY_TEST_SOCKET_TABLE="$socket_table" \
       CODEX_PROXY_TEST_DRY_RUN=1 \
       CODEX_PROXY_TEST_LOCK_DIR="$lock_dir" \
@@ -1042,11 +1091,12 @@ EOF_PROC
 222	${app_server_cmd} HTTP_PROXY=http://127.0.0.1:${cfg_port} HTTPS_PROXY=http://127.0.0.1:${cfg_port} http_proxy=http://127.0.0.1:${cfg_port} https_proxy=http://127.0.0.1:${cfg_port} CODEX_CA_CERTIFICATE=${relay_ca} SSL_CERT_FILE=${relay_ca} NODE_EXTRA_CA_CERTS=${relay_ca} NO_PROXY=localhost,127.0.0.1,::1 no_proxy=localhost,127.0.0.1,::1
 EOF_PROC
   /bin/cat > "$socket_table" <<EOF_SOCK
-222	${chatgpt_root}/Contents/Resources/codex app-server -> 127.0.0.1:${cfg_port}
+222	${chatgpt_root}/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex app-server -> 127.0.0.1:${cfg_port}
 EOF_SOCK
   if ! CODEX_PROXY_HOME="$runtime_home" \
       CODEX_PROXY_LAUNCHER_TEST_MODE=1 \
       CODEX_PROXY_TEST_PROCESS_TABLE="$process_table" \
+      CODEX_PROXY_TEST_PARENT_TABLE="$parent_table" \
       CODEX_PROXY_TEST_SOCKET_TABLE="$socket_table" \
       CODEX_PROXY_TEST_DRY_RUN=1 \
       CODEX_PROXY_TEST_LOCK_DIR="$lock_dir" \
@@ -1055,7 +1105,8 @@ EOF_SOCK
     return 1
   fi
 
-  /bin/rm -f "$fixture_root/launcher-bad-env.tsv" "$fixture_root/launcher-missing-env.tsv"
+  /bin/rm -f "$fixture_root/launcher-bad-env.tsv" "$fixture_root/launcher-missing-env.tsv" \
+    "$fixture_root/app-server-without-node-ca.tsv" "$fixture_root/detached-only.tsv"
   print_pass "launcher TEST_MODE process/env/socket fault coverage"
   return 0
 }
@@ -1074,7 +1125,7 @@ run_relay_installer_lock_suite() {
   add_temp_path "$output_file"
   chatgpt_root="${fixture_root}/Applications/ChatGPT.app"
   chatgpt_exec="${chatgpt_root}/Contents/MacOS/ChatGPT"
-  codex_helper="${chatgpt_root}/Contents/Resources/codex"
+  codex_helper="${chatgpt_root}/Contents/Resources/codex-cli/bin/codex"
 
   /bin/mkdir -p "${cfg_file:h}" "${mitmdump_path:h}" "${chatgpt_exec:h}" "${codex_helper:h}" \
     "${runtime_home}/mitmproxy"

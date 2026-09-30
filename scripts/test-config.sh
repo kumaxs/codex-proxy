@@ -37,15 +37,15 @@ prepare_fake_install() {
 
   mkdir -p "$root/usr/bin" \
     "$root/Applications/ChatGPT.app/Contents/MacOS" \
-    "$root/Applications/ChatGPT.app/Contents/Resources"
+    "$root/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin"
 
   touch "$root/usr/bin/mitmdump"
   chmod +x "$root/usr/bin/mitmdump"
 
   touch "$root/Applications/ChatGPT.app/Contents/MacOS/ChatGPT"
   chmod +x "$root/Applications/ChatGPT.app/Contents/MacOS/ChatGPT"
-  touch "$root/Applications/ChatGPT.app/Contents/Resources/codex"
-  chmod +x "$root/Applications/ChatGPT.app/Contents/Resources/codex"
+  touch "$root/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
+  chmod +x "$root/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
 }
 
 write_config() {
@@ -214,8 +214,8 @@ main() {
   CODEX_PROXY_TEST_TEMP_ROOTS+=("$root")
   cfg="${root}/codex-proxy.conf"
   prepare_fake_install "$root"
-  /bin/rm -f "${root}/Applications/ChatGPT.app/Contents/Resources/codex"
-  /bin/ln -s "${root}/usr/bin/mitmdump" "${root}/Applications/ChatGPT.app/Contents/Resources/codex"
+  /bin/rm -f "${root}/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
+  /bin/ln -s "${root}/usr/bin/mitmdump" "${root}/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
   write_config "$cfg" "$root" "http://127.0.0.1:29758" "127.0.0.1" ""
   run_expect_fail "reject ChatGPT Codex helper symlink" "$cfg" || assert_fail "ChatGPT Codex helper symlink was accepted"
 
@@ -223,9 +223,19 @@ main() {
   CODEX_PROXY_TEST_TEMP_ROOTS+=("$root")
   cfg="${root}/codex-proxy.conf"
   prepare_fake_install "$root"
-  /bin/chmod 600 "${root}/Applications/ChatGPT.app/Contents/Resources/codex"
+  /bin/chmod 600 "${root}/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
   write_config "$cfg" "$root" "http://127.0.0.1:29758" "127.0.0.1" ""
   run_expect_fail "reject non-executable ChatGPT Codex helper" "$cfg" || assert_fail "non-executable ChatGPT Codex helper was accepted"
+
+  root="$(mk_runtime_root)"
+  CODEX_PROXY_TEST_TEMP_ROOTS+=("$root")
+  cfg="${root}/codex-proxy.conf"
+  prepare_fake_install "$root"
+  /bin/rm -f "${root}/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
+  /usr/bin/touch "${root}/Applications/ChatGPT.app/Contents/Resources/codex"
+  /bin/chmod +x "${root}/Applications/ChatGPT.app/Contents/Resources/codex"
+  write_config "$cfg" "$root" "http://127.0.0.1:29758" "127.0.0.1" ""
+  run_expect_success "accept legacy bundled Codex fallback" "$cfg" "$root" || assert_fail "legacy bundled Codex fallback was rejected"
 
   local root_install="${root}/install"
   local root_spaced="${root}/Config Home With Space"
@@ -241,9 +251,9 @@ main() {
   local cfg_spaced_value="${root_spaced_value}/codex-proxy.conf"
   local mitm_path="${root_spaced_value}/usr/bin/mitmdump"
   local app_path="${root_spaced_value}/Applications/ChatGPT.app/Contents/MacOS/ChatGPT"
-  mkdir -p "${root_spaced_value}/usr/bin" "${root_spaced_value}/Applications/ChatGPT.app/Contents/MacOS" "${root_spaced_value}/Applications/ChatGPT.app/Contents/Resources"
-  touch "$mitm_path" "$app_path" "${root_spaced_value}/Applications/ChatGPT.app/Contents/Resources/codex"
-  chmod +x "$mitm_path" "$app_path" "${root_spaced_value}/Applications/ChatGPT.app/Contents/Resources/codex"
+  mkdir -p "${root_spaced_value}/usr/bin" "${root_spaced_value}/Applications/ChatGPT.app/Contents/MacOS" "${root_spaced_value}/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin"
+  touch "$mitm_path" "$app_path" "${root_spaced_value}/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
+  chmod +x "$mitm_path" "$app_path" "${root_spaced_value}/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
   write_config "$cfg_spaced_value" "$root_spaced_value" "http://127.0.0.1:29758" "127.0.0.1" ""
   run_expect_success "accept config values containing path spaces" "$cfg_spaced_value" "$root_spaced_value" || assert_fail "path spaces were rejected"
   CODEX_PROXY_TEST_TEMP_ROOTS+=("$root_spaced_value")

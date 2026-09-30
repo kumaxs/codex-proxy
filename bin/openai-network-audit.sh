@@ -362,11 +362,8 @@ run_request() {
 }
 
 run_codex_doctor_check() {
-  local codex_binary="${CODEX_PROXY_CHATGPT_APP_PATH:h:h}/Resources/codex"
-  if [[ ! -x "$codex_binary" ]]; then
-    print -u2 "codex binary not found: $codex_binary"
-    return 1
-  fi
+  local codex_binary
+  codex_binary="$(codex_proxy_resolve_bundled_codex "$CODEX_PROXY_CHATGPT_APP_PATH")" || return 1
 
   local output_file error_file
   local doctor_exit

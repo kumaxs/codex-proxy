@@ -76,7 +76,8 @@ readonly RELAY_PORT="${CODEX_PROXY_LISTEN_PORT}"
 readonly UPSTREAM_HOST="$CODEX_PROXY_UPSTREAM_HOST"
 readonly UPSTREAM_PORT="$CODEX_PROXY_UPSTREAM_PORT"
 readonly RELAY_CA="$CODEX_PROXY_CA_CERT"
-readonly CODEX_BINARY="${CODEX_PROXY_CHATGPT_APP_PATH:h:h}/Resources/codex"
+CODEX_BINARY="$(codex_proxy_resolve_bundled_codex "$CODEX_PROXY_CHATGPT_APP_PATH")" || exit 1
+readonly CODEX_BINARY
 readonly NO_PROXY_VALUE="localhost,127.0.0.1,::1"
 readonly -a AMBIENT_PROXY_UNSET_ARGS=(
   -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy

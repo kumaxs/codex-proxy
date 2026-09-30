@@ -56,7 +56,7 @@ relay 监听地址只能是 loopback（`127.0.0.1`、`localhost` 或 `::1`）。
 
 - 可用的 macOS `/bin/zsh`、`launchctl`、`curl`、`nc`、`lsof`、`plutil`、`osacompile`、`osadecompile` 和 `codesign`；
 - 已安装且可执行的 `mitmdump`（安装器不会替你下载或安装它）；
-- 已安装的官方 ChatGPT.app，且其 `Contents/MacOS/ChatGPT` 与 `Contents/Resources/codex` 可被校验；
+- 已安装的官方 ChatGPT.app，且其 `Contents/MacOS/ChatGPT` 可执行；bundled Codex 优先识别新版 `Contents/Resources/codex-cli/bin/codex`，同时兼容旧版 `Contents/Resources/codex`；
 - 一个你有权使用的 HTTP 或 HTTPS upstream 代理 URL。
 
 ## 安装
@@ -164,11 +164,11 @@ bin/launch-codex-proxied.sh --config "$CONFIG" --launch-and-verify
 
 relay 使用 mitmproxy 的本地 CA 来解密和重新签发 HTTPS 流量，因此 relay 进程及其运行目录对**经过拦截的明文**具有可见性；这包括可能的会话内容、Remote 控制流量或图片请求元数据。请只在你有权审计的设备和网络中运行，不要把 runtime CA 发给他人。
 
-launcher 会验证 ChatGPT 主进程和 Codex app-server 的环境，并多轮采样它们已建立的 TCP socket；它不覆盖 UDP/QUIC，也不能穷尽所有 GUI/Chromium helper 的网络活动。部分 GUI 或 Chromium 栈可能不继承或不遵守同一进程环境，所以 Remote、图片和其他业务链路不能由这项检查推断，必须做真实业务实测。
+launcher 会验证 ChatGPT 主进程和它直接启动的 Codex app-server 环境，并多轮采样关键 TCP socket。进程生命周期只管理当前 ChatGPT 主进程的后代；新版桌面端由独立长期 daemon 持有的 bundle helper 不会被误判成 GUI 残留，也不会阻塞代理重启。检查不覆盖 UDP/QUIC，也不能穷尽所有 GUI/Chromium helper 的网络活动，所以 Remote、图片和其他业务链路仍需真实业务实测。
 
 如果进程已经启动、但 postflight 随后失败，launcher 会返回非零并明确提示“状态未验证”；为避免再次出现自动终止/重启循环，它不会擅自发送 TERM。此时应用可能仍在运行，必须由用户手动退出后再重试；“没有 direct-launch fallback”不等于对残留进程实施了网络沙箱。
 
-本项目不把 CA 写入系统钥匙串，也不修改系统信任库；launcher 只把 `HTTP_PROXY`/`HTTPS_PROXY`、`CODEX_CA_CERTIFICATE`、`SSL_CERT_FILE`、`NODE_EXTRA_CA_CERTS` 和 loopback `NO_PROXY` 注入到本次启动的进程。`ALL_PROXY`、SOCKS/WS/FTP 及常见 Git/npm 代理覆盖变量会被移除。请按 [SECURITY.md](SECURITY.md) 管理 runtime 权限、日志和报告敏感问题。
+本项目不把 CA 写入系统钥匙串，也不修改系统信任库；launcher 会把 `HTTP_PROXY`/`HTTPS_PROXY`、`CODEX_CA_CERTIFICATE`、`SSL_CERT_FILE`、`NODE_EXTRA_CA_CERTS` 和 loopback `NO_PROXY` 注入 ChatGPT 主进程。新版桌面端可能在生成 Codex app-server 时移除 `NODE_EXTRA_CA_CERTS`，因此 app-server 校验要求其余代理与 CA 变量保持正确，但不再强制这一项。`ALL_PROXY`、SOCKS/WS/FTP 及常见 Git/npm 代理覆盖变量仍会被拒绝。请按 [SECURITY.md](SECURITY.md) 管理 runtime 权限、日志和报告敏感问题。
 
 ## 官方资料
 

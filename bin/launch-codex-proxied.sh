@@ -353,7 +353,6 @@ verify_process_sockets() {
   local pid="$1"
   local role="$2"
   local require_relay="$3"
-  local allow_upstream="$4"
   local round line remote
   local found_relay=0
   local found_established=0
@@ -389,7 +388,7 @@ verify_process_sockets() {
     fi
   done
 
-  if (( forbidden_upstream == 1 && allow_upstream == 0 )); then
+  if (( forbidden_upstream == 1 )); then
     log_error "${role} PID ${pid}: direct connection to upstream port ${UPSTREAM_PORT} is forbidden."
     return 1
   fi
@@ -449,12 +448,6 @@ verify_current() {
     return 1
   }
 
-  base_command="$(base_command_for_pid "${main_pids[1]}")"
-  if [[ " $base_command " != *" --proxy-server=${BROWSER_PROXY_URL} "* ]]; then
-    log_error "ChatGPT main process is missing the required Chromium proxy argument."
-    return 1
-  fi
-
   env_command="$(environment_command_for_pid "${main_pids[1]}")"
   if ! process_has_required_env "$env_command"; then
     log_error "ChatGPT main process environment does not exactly match the scoped proxy policy."
@@ -467,8 +460,8 @@ verify_current() {
     return 1
   fi
 
-  verify_process_sockets "${main_pids[1]}" "ChatGPT main" 0 1 || return 1
-  verify_process_sockets "${app_server_pids[1]}" "Codex app-server" 1 0 || return 1
+  verify_process_sockets "${main_pids[1]}" "ChatGPT main" 0 || return 1
+  verify_process_sockets "${app_server_pids[1]}" "Codex app-server" 1 || return 1
 
   [[ "$(process_identity_for_pid "${main_pids[1]}" 2>/dev/null)" == "$main_identity" ]] || {
     log_error "ChatGPT main process identity changed during verification."
@@ -699,7 +692,7 @@ launch_chatgpt() {
     NODE_EXTRA_CA_CERTS="$RELAY_CA" \
     NO_PROXY="$NO_PROXY_VALUE" \
     no_proxy="$NO_PROXY_VALUE" \
-    "$CHATGPT_EXECUTABLE" "--proxy-server=$BROWSER_PROXY_URL" >> "$LAUNCHER_LOG" 2>&1 </dev/null &
+    "$CHATGPT_EXECUTABLE" >> "$LAUNCHER_LOG" 2>&1 </dev/null &
 }
 
 preflight() {
@@ -796,7 +789,6 @@ init_runtime() {
   RELAY_BIND_HOST="${CODEX_PROXY_LISTEN_HOST_FOR_BIND}"
   UPSTREAM_HOST="$CODEX_PROXY_UPSTREAM_HOST"
   UPSTREAM_PORT="$CODEX_PROXY_UPSTREAM_PORT"
-  BROWSER_PROXY_URL="$CODEX_PROXY_UPSTREAM_PROXY_URL"
   START_RELAY="$CODEX_PROXY_BIN_DIR/start-relay.sh"
   PROXY_HEALTH="$CODEX_PROXY_BIN_DIR/proxy-health.sh"
   ROTATE_LOG="$CODEX_PROXY_BIN_DIR/rotate-launcher-log.sh"

@@ -912,7 +912,7 @@ PASSTHROUGH_REGEX=
 EOF_CFG
 
   /bin/cat > "$process_table" <<EOF_PROC
-111	${chatgpt_exec} --proxy-server=http://127.0.0.1:${upstream_port} HTTP_PROXY=http://127.0.0.1:${cfg_port} HTTPS_PROXY=http://127.0.0.1:${cfg_port} http_proxy=http://127.0.0.1:${cfg_port} https_proxy=http://127.0.0.1:${cfg_port} CODEX_CA_CERTIFICATE=${relay_ca} SSL_CERT_FILE=${relay_ca} NODE_EXTRA_CA_CERTS=${relay_ca} NO_PROXY=localhost,127.0.0.1,::1 no_proxy=localhost,127.0.0.1,::1
+111	${chatgpt_exec} HTTP_PROXY=http://127.0.0.1:${cfg_port} HTTPS_PROXY=http://127.0.0.1:${cfg_port} http_proxy=http://127.0.0.1:${cfg_port} https_proxy=http://127.0.0.1:${cfg_port} CODEX_CA_CERTIFICATE=${relay_ca} SSL_CERT_FILE=${relay_ca} NODE_EXTRA_CA_CERTS=${relay_ca} NO_PROXY=localhost,127.0.0.1,::1 no_proxy=localhost,127.0.0.1,::1
 222	${app_server_cmd} HTTP_PROXY=http://127.0.0.1:${cfg_port} HTTPS_PROXY=http://127.0.0.1:${cfg_port} http_proxy=http://127.0.0.1:${cfg_port} https_proxy=http://127.0.0.1:${cfg_port} CODEX_CA_CERTIFICATE=${relay_ca} SSL_CERT_FILE=${relay_ca} NODE_EXTRA_CA_CERTS=${relay_ca} NO_PROXY=localhost,127.0.0.1,::1 no_proxy=localhost,127.0.0.1,::1
 EOF_PROC
   /bin/cat > "$socket_table" <<EOF_SOCK
@@ -978,35 +978,8 @@ EOF_SOCK
   fi
 
   /bin/cat > "$socket_table" <<EOF_SOCK
-111	${chatgpt_exec} -> 127.0.0.1:${upstream_port}
 222	${chatgpt_root}/Contents/Resources/codex app-server -> 127.0.0.1:${cfg_port}
 EOF_SOCK
-  if ! CODEX_PROXY_HOME="$runtime_home" \
-      CODEX_PROXY_LAUNCHER_TEST_MODE=1 \
-      CODEX_PROXY_TEST_PROCESS_TABLE="$process_table" \
-      CODEX_PROXY_TEST_SOCKET_TABLE="$socket_table" \
-      CODEX_PROXY_TEST_DRY_RUN=1 \
-      CODEX_PROXY_TEST_LOCK_DIR="$lock_dir" \
-      /bin/zsh "$fixture_root/bin/launch-codex-proxied.sh" --config "$cfg_file" --verify-current >/dev/null 2>&1; then
-    print_fail "launcher TEST_MODE should allow ChatGPT main process to use configured browser upstream"
-    return 1
-  fi
-
-  /bin/cat > "$socket_table" <<EOF_SOCK
-222	${chatgpt_root}/Contents/Resources/codex app-server -> 127.0.0.1:${cfg_port}
-EOF_SOCK
-
-  /usr/bin/sed -E 's/ --proxy-server=[^ ]+//' "$process_table" > "$fixture_root/launcher-missing-browser-proxy.tsv"
-  if CODEX_PROXY_HOME="$runtime_home" \
-      CODEX_PROXY_LAUNCHER_TEST_MODE=1 \
-      CODEX_PROXY_TEST_PROCESS_TABLE="$fixture_root/launcher-missing-browser-proxy.tsv" \
-      CODEX_PROXY_TEST_SOCKET_TABLE="$socket_table" \
-      CODEX_PROXY_TEST_DRY_RUN=1 \
-      CODEX_PROXY_TEST_LOCK_DIR="$lock_dir" \
-      /bin/zsh "$fixture_root/bin/launch-codex-proxied.sh" --config "$cfg_file" --verify-current >/dev/null 2>&1; then
-    print_fail "launcher TEST_MODE should reject a main process without the Chromium proxy argument"
-    return 1
-  fi
 
   /usr/bin/sed -e 's/HTTPS_PROXY=[^ ]* / /' "$process_table" > "$fixture_root/launcher-bad-env.tsv"
   /bin/cp "$fixture_root/launcher-bad-env.tsv" "$process_table"
@@ -1035,7 +1008,7 @@ EOF_SOCK
   fi
 
   /bin/cat > "$process_table" <<EOF_PROC
-111	${chatgpt_exec} --proxy-server=http://127.0.0.1:${upstream_port} HTTP_PROXY=http://127.0.0.1:${cfg_port} HTTPS_PROXY=http://127.0.0.1:${cfg_port} http_proxy=http://127.0.0.1:${cfg_port} https_proxy=http://127.0.0.1:${cfg_port} CODEX_CA_CERTIFICATE=${relay_ca} SSL_CERT_FILE=${relay_ca} NODE_EXTRA_CA_CERTS=${relay_ca} NO_PROXY=localhost,127.0.0.1,::1 no_proxy=localhost,127.0.0.1,::1 SOCKS_PROXY=socks5://127.0.0.1:1080
+111	${chatgpt_exec} HTTP_PROXY=http://127.0.0.1:${cfg_port} HTTPS_PROXY=http://127.0.0.1:${cfg_port} http_proxy=http://127.0.0.1:${cfg_port} https_proxy=http://127.0.0.1:${cfg_port} CODEX_CA_CERTIFICATE=${relay_ca} SSL_CERT_FILE=${relay_ca} NODE_EXTRA_CA_CERTS=${relay_ca} NO_PROXY=localhost,127.0.0.1,::1 no_proxy=localhost,127.0.0.1,::1 SOCKS_PROXY=socks5://127.0.0.1:1080
 222	${app_server_cmd} HTTP_PROXY=http://127.0.0.1:${cfg_port} HTTPS_PROXY=http://127.0.0.1:${cfg_port} http_proxy=http://127.0.0.1:${cfg_port} https_proxy=http://127.0.0.1:${cfg_port} CODEX_CA_CERTIFICATE=${relay_ca} SSL_CERT_FILE=${relay_ca} NODE_EXTRA_CA_CERTS=${relay_ca} NO_PROXY=localhost,127.0.0.1,::1 no_proxy=localhost,127.0.0.1,::1
 EOF_PROC
   if CODEX_PROXY_HOME="$runtime_home" \
@@ -1050,8 +1023,8 @@ EOF_PROC
   fi
 
   /bin/cat > "$process_table" <<EOF_PROC
-111	${chatgpt_exec} --proxy-server=http://127.0.0.1:${upstream_port} HTTP_PROXY=http://127.0.0.1:${cfg_port} HTTPS_PROXY=http://127.0.0.1:${cfg_port} http_proxy=http://127.0.0.1:${cfg_port} https_proxy=http://127.0.0.1:${cfg_port} CODEX_CA_CERTIFICATE=${relay_ca} SSL_CERT_FILE=${relay_ca} NODE_EXTRA_CA_CERTS=${relay_ca} NO_PROXY=localhost,127.0.0.1,::1 no_proxy=localhost,127.0.0.1,::1
-222	${chatgpt_exec} --proxy-server=http://127.0.0.1:${upstream_port} HTTP_PROXY=http://127.0.0.1:${cfg_port} HTTPS_PROXY=http://127.0.0.1:${cfg_port} http_proxy=http://127.0.0.1:${cfg_port} https_proxy=http://127.0.0.1:${cfg_port} CODEX_CA_CERTIFICATE=${relay_ca} SSL_CERT_FILE=${relay_ca} NODE_EXTRA_CA_CERTS=${relay_ca} NO_PROXY=localhost,127.0.0.1,::1 no_proxy=localhost,127.0.0.1,::1
+111	${chatgpt_exec} HTTP_PROXY=http://127.0.0.1:${cfg_port} HTTPS_PROXY=http://127.0.0.1:${cfg_port} http_proxy=http://127.0.0.1:${cfg_port} https_proxy=http://127.0.0.1:${cfg_port} CODEX_CA_CERTIFICATE=${relay_ca} SSL_CERT_FILE=${relay_ca} NODE_EXTRA_CA_CERTS=${relay_ca} NO_PROXY=localhost,127.0.0.1,::1 no_proxy=localhost,127.0.0.1,::1
+222	${chatgpt_exec} HTTP_PROXY=http://127.0.0.1:${cfg_port} HTTPS_PROXY=http://127.0.0.1:${cfg_port} http_proxy=http://127.0.0.1:${cfg_port} https_proxy=http://127.0.0.1:${cfg_port} CODEX_CA_CERTIFICATE=${relay_ca} SSL_CERT_FILE=${relay_ca} NODE_EXTRA_CA_CERTS=${relay_ca} NO_PROXY=localhost,127.0.0.1,::1 no_proxy=localhost,127.0.0.1,::1
 EOF_PROC
   if CODEX_PROXY_HOME="$runtime_home" \
       CODEX_PROXY_LAUNCHER_TEST_MODE=1 \
@@ -1065,7 +1038,7 @@ EOF_PROC
   fi
 
   /bin/cat > "$process_table" <<EOF_PROC
-111	${chatgpt_exec} --proxy-server=http://127.0.0.1:${upstream_port} HTTP_PROXY=http://127.0.0.1:${cfg_port} HTTPS_PROXY=http://127.0.0.1:${cfg_port} http_proxy=http://127.0.0.1:${cfg_port} https_proxy=http://127.0.0.1:${cfg_port} CODEX_CA_CERTIFICATE=${relay_ca} SSL_CERT_FILE=${relay_ca} NODE_EXTRA_CA_CERTS=${relay_ca} NO_PROXY=localhost,127.0.0.1,::1 no_proxy=localhost,127.0.0.1,::1
+111	${chatgpt_exec} HTTP_PROXY=http://127.0.0.1:${cfg_port} HTTPS_PROXY=http://127.0.0.1:${cfg_port} http_proxy=http://127.0.0.1:${cfg_port} https_proxy=http://127.0.0.1:${cfg_port} CODEX_CA_CERTIFICATE=${relay_ca} SSL_CERT_FILE=${relay_ca} NODE_EXTRA_CA_CERTS=${relay_ca} NO_PROXY=localhost,127.0.0.1,::1 no_proxy=localhost,127.0.0.1,::1
 222	${app_server_cmd} HTTP_PROXY=http://127.0.0.1:${cfg_port} HTTPS_PROXY=http://127.0.0.1:${cfg_port} http_proxy=http://127.0.0.1:${cfg_port} https_proxy=http://127.0.0.1:${cfg_port} CODEX_CA_CERTIFICATE=${relay_ca} SSL_CERT_FILE=${relay_ca} NODE_EXTRA_CA_CERTS=${relay_ca} NO_PROXY=localhost,127.0.0.1,::1 no_proxy=localhost,127.0.0.1,::1
 EOF_PROC
   /bin/cat > "$socket_table" <<EOF_SOCK
@@ -1082,7 +1055,7 @@ EOF_SOCK
     return 1
   fi
 
-  /bin/rm -f "$fixture_root/launcher-bad-env.tsv" "$fixture_root/launcher-missing-env.tsv" "$fixture_root/launcher-missing-browser-proxy.tsv"
+  /bin/rm -f "$fixture_root/launcher-bad-env.tsv" "$fixture_root/launcher-missing-env.tsv"
   print_pass "launcher TEST_MODE process/env/socket fault coverage"
   return 0
 }

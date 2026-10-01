@@ -179,9 +179,14 @@ typeset -a mitmdump_args=(
   "flow_detail=0"
 )
 
+# Bundled CLI/app-server TLS/WSS must keep the origin TLS certificate.
+# The local relay is an HTTP CONNECT/upstream adapter for standard TLS/WSS on
+# port 443; user PASSTHROUGH_REGEX remains an additional ignore-hosts rule.
+typeset effective_passthrough_regex='.*:443$'
 if [[ -n "$CODEX_PROXY_PASSTHROUGH_REGEX" ]]; then
-  mitmdump_args+=(--ignore-hosts "$CODEX_PROXY_PASSTHROUGH_REGEX")
+  effective_passthrough_regex="${effective_passthrough_regex}|${CODEX_PROXY_PASSTHROUGH_REGEX}"
 fi
+mitmdump_args+=(--ignore-hosts "$effective_passthrough_regex")
 
 if ! codex_proxy_assert_no_install_transaction; then
   exit 1

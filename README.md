@@ -168,7 +168,7 @@ launcher 会验证 ChatGPT 主进程和它直接启动的 Codex app-server 环�
 
 如果进程已经启动、但 postflight 随后失败，launcher 会返回非零并明确提示“状态未验证”；为避免再次出现自动终止/重启循环，它不会擅自发送 TERM。此时应用可能仍在运行，必须由用户手动退出后再重试；“没有 direct-launch fallback”不等于对残留进程实施了网络沙箱。
 
-本项目不把 CA 写入系统钥匙串，也不修改系统信任库；launcher 会把 `HTTP_PROXY`/`HTTPS_PROXY`、`CODEX_CA_CERTIFICATE`、`SSL_CERT_FILE`、`NODE_EXTRA_CA_CERTS` 和 loopback `NO_PROXY` 注入 ChatGPT 主进程。新版桌面端可能在生成 Codex app-server 时移除 `NODE_EXTRA_CA_CERTS`，因此 app-server 校验要求其余代理与 CA 变量保持正确，但不再强制这一项。`ALL_PROXY`、SOCKS/WS/FTP 及常见 Git/npm 代理覆盖变量仍会被拒绝。请按 [SECURITY.md](SECURITY.md) 管理 runtime 权限、日志和报告敏感问题。
+本项目不把 CA 写入系统钥匙串，也不修改系统信任库；launcher 会把 `HTTP_PROXY`/`HTTPS_PROXY`、`CODEX_CA_CERTIFICATE`、`SSL_CERT_FILE`、`NODE_EXTRA_CA_CERTS`、`NODE_USE_ENV_PROXY=1` 和 loopback `NO_PROXY` 注入 ChatGPT 主进程。`NODE_USE_ENV_PROXY=1` 用于新版 Space/Pages 的 Electron 主进程原生 realtime WebSocket，使 Node 默认 HTTP(S) agent 也遵循本次进程级代理。新版桌面端可能在生成 Codex app-server 时移除 `NODE_EXTRA_CA_CERTS`，因此 app-server 校验要求其余代理与 CA 变量保持正确，但不再强制这一项。`ALL_PROXY`、SOCKS/WS/FTP 及常见 Git/npm 代理覆盖变量仍会被拒绝。请按 [SECURITY.md](SECURITY.md) 管理 runtime 权限、日志和报告敏感问题。
 
 ## 官方资料
 

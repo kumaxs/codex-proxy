@@ -511,6 +511,10 @@ verify_current() {
   }
 
   env_command="$(environment_command_for_pid "${main_pids[1]}")"
+  if ! command_has_exact_env "$env_command" "NODE_USE_ENV_PROXY" "1"; then
+    log_error "ChatGPT main process is missing NODE_USE_ENV_PROXY=1 required for native Pages realtime proxying."
+    return 1
+  fi
   if ! process_has_required_env "$env_command" "main"; then
     log_error "ChatGPT main process environment does not exactly match the scoped proxy policy."
     return 1
@@ -752,6 +756,7 @@ launch_chatgpt() {
     CODEX_CA_CERTIFICATE="$RELAY_CA" \
     SSL_CERT_FILE="$RELAY_CA" \
     NODE_EXTRA_CA_CERTS="$RELAY_CA" \
+    NODE_USE_ENV_PROXY=1 \
     NO_PROXY="$NO_PROXY_VALUE" \
     no_proxy="$NO_PROXY_VALUE" \
     "$CHATGPT_EXECUTABLE" >> "$LAUNCHER_LOG" 2>&1 </dev/null &

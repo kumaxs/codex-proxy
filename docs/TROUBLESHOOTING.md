@@ -86,11 +86,11 @@ bin/proxy-health.sh --config "$CONFIG" --http-only
 bin/launch-codex-proxied.sh --config "$CONFIG" --preflight
 ```
 
-launcher 会为 ChatGPT 主进程设置 `CODEX_CA_CERTIFICATE`、`SSL_CERT_FILE`、`NODE_EXTRA_CA_CERTS` 和 `NODE_USE_ENV_PROXY=1`，同时设置 HTTP(S) proxy，并移除 `ALL_PROXY`、SOCKS/WS/FTP 及常见 Git/npm 代理覆盖变量。当前桌面端生成的 Codex app-server 可能不保留 `NODE_EXTRA_CA_CERTS`；只要 `CODEX_CA_CERTIFICATE`、`SSL_CERT_FILE` 与 HTTP(S) proxy 正确且 socket 仍指向 relay，这不再判为故障。项目不会把该 CA 安装到系统钥匙串或系统信任库；不要通过修改系统 CA 来“修复”此错误。
+launcher 会为 ChatGPT 主进程设置 `CODEX_CA_CERTIFICATE`、`SSL_CERT_FILE`、`NODE_EXTRA_CA_CERTS`、HTTP(S) proxy 和 `CODEX_APP_SERVER_FORCE_CLI=1`，并移除 `ALL_PROXY`、SOCKS/WS/FTP 及常见 Git/npm 代理覆盖变量。当前桌面端生成的 Codex app-server 可能不保留 `NODE_EXTRA_CA_CERTS`；只要其余代理边界正确，这不再判为故障。项目不会把 CA 安装到系统钥匙串或系统信任库。
 
 ## 5. Space / Pages 页面打不开
 
-新版 Space/Pages 同时使用两类网络路径：页面、模板、站点、资料库等 GUI/WebView 请求由 Chromium NetworkService 发起；正文 realtime 还会使用 Electron 主进程中的 Node WebSocket。launcher 因此给 ChatGPT 添加 `--proxy-server=<loopback relay>`，让 Chromium/WebView 进入同一 relay；同时设置 `NODE_USE_ENV_PROXY=1`，让 Node realtime 通过已有 `HTTP_PROXY`/`HTTPS_PROXY` 进入 relay。relay 对标准 `:443` TLS/WSS 使用 passthrough，保留源站证书并通过 configured upstream 转发。
+新版 Space/Pages 同时使用 Chromium/WebView、Pages API/pub-sub 和一个名为 durable 的 app-server transport。实机确认 durable 默认连接 `wss://codex-cloud-backend.chatgpt.com/`，而当前桌面端对这个生产地址不会自动配置代理，因此在需要代理的网络中会反复 close 1006，并让 Page 创建/打开卡在“正在打开…”。最终方案让 Chromium/WebView 通过 `--proxy-server=<UPSTREAM_PROXY_URL>` 直接使用 configured upstream，并设置应用原生支持的 `CODEX_APP_SERVER_FORCE_CLI=1`，使 durable 改用 bundled CLI/stdio transport；CLI/app-server 的网络继续通过 loopback relay。
 
 先检查：
 
@@ -98,7 +98,7 @@ launcher 会为 ChatGPT 主进程设置 `CODEX_CA_CERTIFICATE`、`SSL_CERT_FILE`
 bin/launch-codex-proxied.sh --config "$CONFIG" --verify-current
 ```
 
-`--verify-current` 会同时确认主进程带有正确 `--proxy-server`、Chromium NetworkService 已连接 loopback relay、主进程具有 `NODE_USE_ENV_PROXY=1`，以及 Codex app-server 仍连接本机 relay。不要使用 `--ignore-certificate-errors`，也不要修改官方 `ChatGPT.app`、重签名应用或扩大系统 CA 信任。
+`--verify-current` 会确认主进程带有正确 `--proxy-server`、Chromium NetworkService 已连接 configured upstream、主进程具有 `CODEX_APP_SERVER_FORCE_CLI=1`，并逐个检查 direct-child Codex app-server 的身份与代理边界。不要使用 `--ignore-certificate-errors`，也不要修改官方 `ChatGPT.app`、重签名应用或扩大系统 CA 信任。
 
 ## 6. Responses 出现 `retry 5/5` 或 WebSocket 断开
 

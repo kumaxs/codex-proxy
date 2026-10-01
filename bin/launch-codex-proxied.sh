@@ -364,7 +364,7 @@ core_process_shape_ready() {
     fi
   done <<< "$snapshot"
 
-  (( main_count == 1 && app_server_count == 1 ))
+  (( main_count == 1 && app_server_count >= 1 ))
 }
 
 list_processes() {
@@ -422,13 +422,17 @@ verify_process_sockets() {
   local pid="$1"
   local role="$2"
   local require_relay="$3"
+  local allow_upstream="${4:-0}"
   local round line remote
   local found_relay=0
+  local found_upstream=0
   local found_established=0
   local forbidden_upstream=0
   local forbidden_external_443=0
+  local max_rounds="$SOCKET_SAMPLE_ROUNDS"
+  (( require_relay == 0 && allow_upstream == 0 )) && max_rounds=1
 
-  for (( round = 1; round <= SOCKET_SAMPLE_ROUNDS; round++ )); do
+  for (( round = 1; round <= max_rounds; round++ )); do
     while IFS= read -r line; do
       [[ "$line" == *"->"* ]] || continue
       remote="${line##*->}"
@@ -441,7 +445,11 @@ verify_process_sockets() {
           (( found_relay = 1 ))
           ;;
         *:${UPSTREAM_PORT})
-          (( forbidden_upstream = 1 ))
+          if (( allow_upstream == 1 )); then
+            (( found_upstream = 1 ))
+          else
+            (( forbidden_upstream = 1 ))
+          fi
           ;;
         *:443)
           case "$remote" in
@@ -452,7 +460,7 @@ verify_process_sockets() {
       esac
     done < <(socket_snapshot_for_pid "$pid")
 
-    if (( TEST_MODE == 0 && round < SOCKET_SAMPLE_ROUNDS )); then
+    if (( TEST_MODE == 0 && round < max_rounds )); then
       /bin/sleep "$SOCKET_SAMPLE_SLEEP_SECONDS"
     fi
   done
@@ -464,6 +472,17 @@ verify_process_sockets() {
   if (( forbidden_external_443 == 1 )); then
     log_error "${role} PID ${pid}: direct external port 443 connection is forbidden."
     return 1
+  fi
+  if (( allow_upstream == 1 )); then
+    if (( found_relay == 1 )); then
+      log_error "${role} PID ${pid}: browser traffic unexpectedly used the loopback relay."
+      return 1
+    fi
+    if (( found_established == 0 || found_upstream == 0 )); then
+      log_error "${role} PID ${pid}: no ESTABLISHED connection to upstream port ${UPSTREAM_PORT} was observed."
+      return 1
+    fi
+    return 0
   fi
   if (( require_relay == 1 )); then
     if (( found_established == 0 )); then
@@ -506,8 +525,8 @@ verify_current() {
     log_error "Expected exactly one ChatGPT main process; found ${#main_pids[@]}."
     return 1
   fi
-  if (( ${#app_server_pids[@]} != 1 )); then
-    log_error "Expected exactly one Codex app-server process; found ${#app_server_pids[@]}."
+  if (( ${#app_server_pids[@]} < 1 )); then
+    log_error "Expected at least one Codex app-server process; found none."
     return 1
   fi
   if (( ${#network_service_pids[@]} != 1 )); then
@@ -527,11 +546,6 @@ verify_current() {
     log_error "ChatGPT main process identity could not be verified from its loaded executable."
     return 1
   }
-  app_server_identity="$(process_identity_for_pid "${app_server_pids[1]}")" || {
-    log_error "Codex app-server process identity could not be verified from its loaded executable."
-    return 1
-  }
-
   main_command="$(base_command_for_pid "${main_pids[1]}")"
   if [[ " $main_command " != *" --proxy-server=${BROWSER_PROXY_URL} "* ]]; then
     log_error "ChatGPT main process is missing the required Chromium proxy argument."
@@ -539,8 +553,8 @@ verify_current() {
   fi
 
   env_command="$(environment_command_for_pid "${main_pids[1]}")"
-  if ! command_has_exact_env "$env_command" "NODE_USE_ENV_PROXY" "1"; then
-    log_error "ChatGPT main process is missing NODE_USE_ENV_PROXY=1 required for native Pages realtime proxying."
+  if ! command_has_exact_env "$env_command" "CODEX_APP_SERVER_FORCE_CLI" "1"; then
+    log_error "ChatGPT main process is missing CODEX_APP_SERVER_FORCE_CLI=1 required for durable Space/Page compatibility."
     return 1
   fi
   if ! process_has_required_env "$env_command" "main"; then
@@ -548,25 +562,30 @@ verify_current() {
     return 1
   fi
 
-  env_command="$(environment_command_for_pid "${app_server_pids[1]}")"
-  if ! process_has_required_env "$env_command" "app-server"; then
-    log_error "Codex app-server environment does not match the scoped proxy policy."
-    return 1
-  fi
+  verify_process_sockets "${network_service_pids[1]}" "ChatGPT Chromium NetworkService" 0 1 || return 1
 
-  verify_process_sockets "${network_service_pids[1]}" "ChatGPT Chromium NetworkService" 1 || return 1
-  verify_process_sockets "${app_server_pids[1]}" "Codex app-server" 1 || return 1
+  for pid in "${app_server_pids[@]}"; do
+    process_identity_for_pid "$pid" >/dev/null || {
+      log_error "Codex app-server PID ${pid} identity could not be verified from its loaded executable."
+      return 1
+    }
+    env_command="$(environment_command_for_pid "$pid")"
+    if ! process_has_required_env "$env_command" "app-server"; then
+      log_error "Codex app-server PID ${pid} environment does not match the scoped proxy policy."
+      return 1
+    fi
+    verify_process_sockets "$pid" "Codex app-server" 0 0 || return 1
+    [[ "$(parent_pid_for_pid "$pid" 2>/dev/null)" == "${main_pids[1]}" ]] || {
+      log_error "Codex app-server PID ${pid} is not a direct child of the ChatGPT main process."
+      return 1
+    }
+  done
 
   [[ "$(process_identity_for_pid "${main_pids[1]}" 2>/dev/null)" == "$main_identity" ]] || {
     log_error "ChatGPT main process identity changed during verification."
     return 1
   }
-  [[ "$(process_identity_for_pid "${app_server_pids[1]}" 2>/dev/null)" == "$app_server_identity" ]] || {
-    log_error "Codex app-server identity changed during verification."
-    return 1
-  }
-
-  log_info "Current ChatGPT Chromium/Space path and Codex app-server passed relay verification."
+  log_info "Current ChatGPT Space/Chromium path and ${#app_server_pids[@]} direct-child Codex app-server process(es) passed proxy verification."
   return 0
 }
 
@@ -784,7 +803,7 @@ launch_chatgpt() {
     CODEX_CA_CERTIFICATE="$RELAY_CA" \
     SSL_CERT_FILE="$RELAY_CA" \
     NODE_EXTRA_CA_CERTS="$RELAY_CA" \
-    NODE_USE_ENV_PROXY=1 \
+    CODEX_APP_SERVER_FORCE_CLI=1 \
     NO_PROXY="$NO_PROXY_VALUE" \
     no_proxy="$NO_PROXY_VALUE" \
     "$CHATGPT_EXECUTABLE" "--proxy-server=$BROWSER_PROXY_URL" >> "$LAUNCHER_LOG" 2>&1 </dev/null &
@@ -884,7 +903,7 @@ init_runtime() {
   RELAY_BIND_HOST="${CODEX_PROXY_LISTEN_HOST_FOR_BIND}"
   UPSTREAM_HOST="$CODEX_PROXY_UPSTREAM_HOST"
   UPSTREAM_PORT="$CODEX_PROXY_UPSTREAM_PORT"
-  BROWSER_PROXY_URL="$RELAY_URL"
+  BROWSER_PROXY_URL="$CODEX_PROXY_UPSTREAM_PROXY_URL"
   START_RELAY="$CODEX_PROXY_BIN_DIR/start-relay.sh"
   PROXY_HEALTH="$CODEX_PROXY_BIN_DIR/proxy-health.sh"
   ROTATE_LOG="$CODEX_PROXY_BIN_DIR/rotate-launcher-log.sh"

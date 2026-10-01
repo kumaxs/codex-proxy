@@ -179,7 +179,7 @@ typeset -a mitmdump_args=(
   "flow_detail=0"
 )
 
-# Current ChatGPT Chromium/Space traffic must keep the origin TLS certificate.
+# Bundled CLI/app-server TLS/WSS must keep the origin TLS certificate.
 # The local relay is an HTTP CONNECT/upstream adapter for standard TLS/WSS on
 # port 443; user PASSTHROUGH_REGEX remains an additional ignore-hosts rule.
 typeset effective_passthrough_regex='.*:443$'

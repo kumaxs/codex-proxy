@@ -1,22 +1,47 @@
 # Space compatibility investigation
 
-Investigated on the live macOS host with ChatGPT 26.928.21956.
+Validated on the live macOS host with ChatGPT 26.928.21956.
 
-## Confirmed behavior
+## What changed in Space
 
-- Space home opens and its file/content list loads.
-- The `pages` pub/sub topic subscribes successfully and reconciliation starts.
-- The “页面使用入门” flow is not an external help webpage. It creates a native Page, then opens that Page.
-- The welcome-page implementation uses `POST /pages`, then reads `GET /pages/{page_id}` and navigates to `/space/{page_id}`.
+- Space home, Pages, Sites, Images, recent/library content and template cards are separate UI surfaces.
+- “页面使用入门” is not an external help URL. It creates a native Page with `POST /pages`, reads `GET /pages/{page_id}`, then navigates to `/space/{page_id}`.
 - Team Space content uses `GET /spaces/{space_id}/pages`; Space creation/sharing also uses `/spaces/v2`.
-- Therefore the failure domain is the shared Pages/Space request path, not one guide URL.
+- The `pages` pub/sub subscription can succeed even while the durable app-server transport is unhealthy, so pub/sub success alone is not a sufficient Space health signal.
 
-## Proxy findings
+## Root cause
 
-- Branch checkpoint `d96da9c` adds `NODE_USE_ENV_PROXY=1` so Electron main-process native Pages realtime honors process HTTP(S) proxy variables.
-- Chromium/WebView also needs an explicit `--proxy-server`; environment variables alone do not cover that path reliably.
-- Candidate design under validation sends Chromium/WebView, Node realtime, and Codex app-server to the same loopback relay.
-- The relay tunnels standard TLS/WSS `:443` without local TLS interception, then forwards through the configured upstream.
-- Verification now checks the Chromium NetworkService as a child of ChatGPT and requires it to connect to the loopback relay.
+The current desktop bundle defines the durable endpoint as:
 
-This is a checkpoint, not a release: full Space smoke coverage (welcome Page, new Page, templates, Sites and existing Page open) is still required before merge to main.
+`wss://codex-cloud-backend.chatgpt.com/`
+
+The app's WebSocket transport only installs its built-in SOCKS proxy for selected internal hostnames; the production `codex-cloud-backend.chatgpt.com` durable endpoint receives no proxy agent. In the affected network this caused repeated WebSocket close 1006 before connection establishment. Space Page creation/opening then remained at “正在打开…”.
+
+The desktop app also provides a supported environment switch:
+
+`CODEX_APP_SERVER_FORCE_CLI=1`
+
+With this enabled, the durable host changes from `transport=websocket` to `transport=stdio`, reports the bundled app-server version, initializes successfully and reaches `state=connected`.
+
+## Final proxy layout
+
+- Chromium/WebView: explicit `--proxy-server=<UPSTREAM_PROXY_URL>` directly to the configured HTTP(S) upstream.
+- Durable Space/Page host: `CODEX_APP_SERVER_FORCE_CLI=1` -> bundled CLI/stdio.
+- Bundled CLI/app-server network traffic: process-scoped HTTP(S) proxy -> loopback relay -> configured upstream.
+- Relay standard TLS/WSS `:443`: passthrough, preserving origin certificates for Rust/CLI WebSocket clients.
+
+The current app may create multiple direct-child Codex app-server processes when the durable CLI fallback is active, so verification accepts one or more and checks each child rather than assuming exactly one.
+
+## Live smoke validation
+
+Passed on the live host:
+
+- Space home loads without an error state.
+- “页面使用入门” successfully creates/opens “页面使用指南”; it no longer remains stuck at “正在打开…”.
+- Pages view loads and lists the created guide.
+- Sites view loads and shows its empty/create state.
+- Images view loads.
+- Template cards (待办清单、项目跟踪表、每周更新、反馈跟踪表、更新日志) load and are actionable.
+- The durable host reports `transport=stdio`, `initialized=true`, `state=connected`.
+
+Template generation that invokes Codex/Work could not be completed because the account was showing a Codex/Work usage-limit message during validation; that is distinct from proxy reachability.

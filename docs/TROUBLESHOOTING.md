@@ -90,7 +90,7 @@ launcher 会为 ChatGPT 主进程设置 `CODEX_CA_CERTIFICATE`、`SSL_CERT_FILE`
 
 ## 5. Space / Pages 页面打不开
 
-新版 Space/Pages 的正文实时连接由 Electron 主进程中的 Node WebSocket 发起，不属于 Codex app-server socket，也不会自动采用 Chromium 的系统代理。launcher 因此显式设置 `NODE_USE_ENV_PROXY=1`，让该 Node WebSocket 通过已有 `HTTP_PROXY`/`HTTPS_PROXY` 进入 relay。
+新版 Space/Pages 同时使用两类网络路径：页面、模板、站点、资料库等 GUI/WebView 请求由 Chromium NetworkService 发起；正文 realtime 还会使用 Electron 主进程中的 Node WebSocket。launcher 因此给 ChatGPT 添加 `--proxy-server=<loopback relay>`，让 Chromium/WebView 进入同一 relay；同时设置 `NODE_USE_ENV_PROXY=1`，让 Node realtime 通过已有 `HTTP_PROXY`/`HTTPS_PROXY` 进入 relay。relay 对标准 `:443` TLS/WSS 使用 passthrough，保留源站证书并通过 configured upstream 转发。
 
 先检查：
 
@@ -98,7 +98,7 @@ launcher 会为 ChatGPT 主进程设置 `CODEX_CA_CERTIFICATE`、`SSL_CERT_FILE`
 bin/launch-codex-proxied.sh --config "$CONFIG" --verify-current
 ```
 
-运行中的 ChatGPT 主进程必须同时具有 `NODE_USE_ENV_PROXY=1` 与预期 HTTP(S) proxy。不要为此修改官方 `ChatGPT.app`、重签名应用或扩大系统 CA 信任。
+`--verify-current` 会同时确认主进程带有正确 `--proxy-server`、Chromium NetworkService 已连接 loopback relay、主进程具有 `NODE_USE_ENV_PROXY=1`，以及 Codex app-server 仍连接本机 relay。不要使用 `--ignore-certificate-errors`，也不要修改官方 `ChatGPT.app`、重签名应用或扩大系统 CA 信任。
 
 ## 6. Responses 出现 `retry 5/5` 或 WebSocket 断开
 

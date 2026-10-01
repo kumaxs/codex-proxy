@@ -102,6 +102,13 @@ is_app_server_command() {
   is_bundle_command "$command_line" && [[ " $command_line " == *" app-server "* ]]
 }
 
+is_network_service_command() {
+  local command_line="$1"
+  is_bundle_command "$command_line" &&
+    [[ " $command_line " == *" --type=utility "* ]] &&
+    [[ " $command_line " == *" --utility-sub-type=network.mojom.NetworkService "* ]]
+}
+
 parent_pid_for_pid() {
   local pid="$1"
   local parent_pid
@@ -472,9 +479,10 @@ verify_process_sockets() {
 }
 
 verify_current() {
-  local snapshot record pid base_command env_command main_identity app_server_identity
+  local snapshot record pid base_command env_command main_identity app_server_identity main_command parent_pid
   local -a main_pids=()
   local -a app_server_pids=()
+  local -a network_service_pids=()
 
   if ! snapshot="$(all_target_processes)"; then
     log_error "Unable to enumerate ChatGPT bundle processes."
@@ -489,6 +497,8 @@ verify_current() {
       main_pids+=("$pid")
     elif is_app_server_command "$base_command"; then
       app_server_pids+=("$pid")
+    elif is_network_service_command "$base_command"; then
+      network_service_pids+=("$pid")
     fi
   done <<< "$snapshot"
 
@@ -500,6 +510,18 @@ verify_current() {
     log_error "Expected exactly one Codex app-server process; found ${#app_server_pids[@]}."
     return 1
   fi
+  if (( ${#network_service_pids[@]} != 1 )); then
+    log_error "Expected exactly one ChatGPT Chromium NetworkService; found ${#network_service_pids[@]}."
+    return 1
+  fi
+  parent_pid="$(parent_pid_for_pid "${network_service_pids[1]}" 2>/dev/null)" || {
+    log_error "ChatGPT Chromium NetworkService parent could not be verified."
+    return 1
+  }
+  if [[ "$parent_pid" != "${main_pids[1]}" ]]; then
+    log_error "ChatGPT Chromium NetworkService is not a direct child of the ChatGPT main process."
+    return 1
+  fi
 
   main_identity="$(process_identity_for_pid "${main_pids[1]}")" || {
     log_error "ChatGPT main process identity could not be verified from its loaded executable."
@@ -509,6 +531,12 @@ verify_current() {
     log_error "Codex app-server process identity could not be verified from its loaded executable."
     return 1
   }
+
+  main_command="$(base_command_for_pid "${main_pids[1]}")"
+  if [[ " $main_command " != *" --proxy-server=${BROWSER_PROXY_URL} "* ]]; then
+    log_error "ChatGPT main process is missing the required Chromium proxy argument."
+    return 1
+  fi
 
   env_command="$(environment_command_for_pid "${main_pids[1]}")"
   if ! command_has_exact_env "$env_command" "NODE_USE_ENV_PROXY" "1"; then
@@ -526,7 +554,7 @@ verify_current() {
     return 1
   fi
 
-  verify_process_sockets "${main_pids[1]}" "ChatGPT main" 0 || return 1
+  verify_process_sockets "${network_service_pids[1]}" "ChatGPT Chromium NetworkService" 1 || return 1
   verify_process_sockets "${app_server_pids[1]}" "Codex app-server" 1 || return 1
 
   [[ "$(process_identity_for_pid "${main_pids[1]}" 2>/dev/null)" == "$main_identity" ]] || {
@@ -538,7 +566,7 @@ verify_current() {
     return 1
   }
 
-  log_info "Current ChatGPT main process and Codex app-server passed env/socket verification."
+  log_info "Current ChatGPT Chromium/Space path and Codex app-server passed relay verification."
   return 0
 }
 
@@ -759,7 +787,7 @@ launch_chatgpt() {
     NODE_USE_ENV_PROXY=1 \
     NO_PROXY="$NO_PROXY_VALUE" \
     no_proxy="$NO_PROXY_VALUE" \
-    "$CHATGPT_EXECUTABLE" >> "$LAUNCHER_LOG" 2>&1 </dev/null &
+    "$CHATGPT_EXECUTABLE" "--proxy-server=$BROWSER_PROXY_URL" >> "$LAUNCHER_LOG" 2>&1 </dev/null &
 }
 
 preflight() {
@@ -856,6 +884,7 @@ init_runtime() {
   RELAY_BIND_HOST="${CODEX_PROXY_LISTEN_HOST_FOR_BIND}"
   UPSTREAM_HOST="$CODEX_PROXY_UPSTREAM_HOST"
   UPSTREAM_PORT="$CODEX_PROXY_UPSTREAM_PORT"
+  BROWSER_PROXY_URL="$RELAY_URL"
   START_RELAY="$CODEX_PROXY_BIN_DIR/start-relay.sh"
   PROXY_HEALTH="$CODEX_PROXY_BIN_DIR/proxy-health.sh"
   ROTATE_LOG="$CODEX_PROXY_BIN_DIR/rotate-launcher-log.sh"

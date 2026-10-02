@@ -50,6 +50,7 @@ readonly -a FORBIDDEN_PROXY_ENVS=(
 )
 readonly -a CLEAR_PROXY_ENV_ARGS=(
   -u ALL_PROXY -u all_proxy
+  -u NODE_OPTIONS -u NODE_USE_ENV_PROXY -u CODEX_NODE_HTTPS_PROXY
   -u FTP_PROXY -u ftp_proxy
   -u SOCKS_PROXY -u socks_proxy
   -u WS_PROXY -u ws_proxy
@@ -602,7 +603,15 @@ verify_current() {
     log_error "ChatGPT main process identity changed during verification."
     return 1
   }
-  log_info "Current ChatGPT Space/Chromium path and ${#app_server_pids[@]} direct-child Codex app-server process(es) passed proxy verification."
+  if (( TEST_MODE == 0 )); then
+    pages_proxy verify --pid "${main_pids[1]}"
+    case $? in
+      0) ;;
+      2) log_warn "This ChatGPT build has no validated Page adapter; Pages are NOT verified." ;;
+      *) log_error "Page realtime adapter is not active for this ChatGPT process."; return 1 ;;
+    esac
+  fi
+  log_info "Chromium/CLI proxy paths verified. See Page adapter status above; actual Page content is a separate check."
   return 0
 }
 
@@ -810,6 +819,12 @@ acquire_launch_lock() {
   trap 'release_launch_lock; exit 143' TERM
 }
 
+pages_proxy() {
+  "${CODEX_PROXY_MITMDUMP_PATH:h}/python3" "${SCRIPT_DIR}/pages-realtime-proxy.py" --mode "$1" \
+    --app "$CHATGPT_EXECUTABLE" --proxy "$BROWSER_PROXY_URL" \
+    --state "${CODEX_PROXY_RUNTIME_HOME}/pages-status.json" "${@:2}"
+}
+
 launch_chatgpt() {
   local installed_build
   installed_build="$(installed_chatgpt_build)" || {
@@ -829,7 +844,9 @@ launch_chatgpt() {
     CODEX_PROXY_APP_BUILD="$installed_build" \
     NO_PROXY="$NO_PROXY_VALUE" \
     no_proxy="$NO_PROXY_VALUE" \
-    "$CHATGPT_EXECUTABLE" "--proxy-server=$BROWSER_PROXY_URL" >> "$LAUNCHER_LOG" 2>&1 </dev/null &
+    "${CODEX_PROXY_MITMDUMP_PATH:h}/python3" "${SCRIPT_DIR}/pages-realtime-proxy.py" --mode launch \
+    --app "$CHATGPT_EXECUTABLE" --proxy "$BROWSER_PROXY_URL" --state "${CODEX_PROXY_RUNTIME_HOME}/pages-status.json" \
+    -- "--proxy-server=$BROWSER_PROXY_URL" >> "$LAUNCHER_LOG" 2>&1 </dev/null &
 }
 
 preflight() {
@@ -871,6 +888,14 @@ preflight() {
     return 1
   }
 
+  if (( TEST_MODE == 0 )); then
+    pages_proxy check
+    case $? in
+      0) ;;
+      2) log_warn "Updated ChatGPT: retaining Chromium/CLI proxy; Pages require revalidation." ;;
+      *) return 1 ;;
+    esac
+  fi
   log_info "Strict proxy preflight passed."
   return 0
 }

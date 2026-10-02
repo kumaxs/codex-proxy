@@ -66,3 +66,7 @@ launcher 的 postflight 只对 ChatGPT 主进程和 Codex app-server 做环境�
 ## 许可证
 
 代码和文档按 [MIT License](LICENSE) 发布。MIT 许可不扩大你对第三方服务、账号、网络或官方应用的授权；使用者仍需遵守相关服务条款、组织政策和适用法律。
+
+## Page companion
+
+The Page companion handles the app-authorized Page tokens and document frames in memory, only for the supported official Page endpoints. It retains origin TLS verification and does not log credentials or content. Normal launches use private file descriptors rather than a debug TCP listener. Deployment-only attach mode requires an existing local listener owned by the selected ChatGPT process. Renderer adaptation is restricted to a validated build; unknown builds retain the ordinary proxy without this adapter.

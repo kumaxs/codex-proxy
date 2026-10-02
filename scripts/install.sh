@@ -544,6 +544,13 @@ validate_inputs() {
 
   MITMDUMP_PATH="$(resolve_exec_path "$MITMDUMP_PATH")" || return 1
 
+  if (( LIFECYCLE_TEST_MODE == 0 )); then
+    "${MITMDUMP_PATH:h}/python3" -c "import websocket" >/dev/null 2>&1 || {
+      log_error "Install requirements.txt into the mitmdump Python environment; the Page companion requires websocket-client."
+      return 1
+    }
+  fi
+
   if ! /bin/mkdir -p "${cfg_file:h}" ; then
     return 1
   fi

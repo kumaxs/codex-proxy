@@ -187,3 +187,7 @@ launcher 会验证 ChatGPT 主进程的 `--proxy-server` 参数、Chromium Netwo
 - [贡献指南](CONTRIBUTING.md)
 
 贡献默认遵循 [MIT License](LICENSE)。
+
+## Space Page realtime compatibility
+
+ChatGPT 26.930.21537 / build 12776 needs the process-scoped Page companion in addition to the Chromium/CLI proxy. Install the repository requirements into the same Python environment as `mitmdump`. Normal launches use a private CDP pipe, without changing the official app or opening a debug TCP listener. Unsupported updated builds keep the ordinary proxy and explicitly report Pages as unverified. See [the repair and acceptance record](docs/PAGES_REALTIME_FIX_20261003.md).

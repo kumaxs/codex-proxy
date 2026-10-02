@@ -1,5 +1,7 @@
 # Space compatibility investigation
 
+**2026-10-03 correction:** the earlier HTTP/checkpoint recovery was not end-to-end Page acceptance. See [the Page realtime repair](PAGES_REALTIME_FIX_20261003.md) for the separately confirmed Node WebSocket proxy failure and working document test.
+
 Validated on the live macOS host with ChatGPT 26.928.21956. Re-investigated after the 26.928.31416 desktop update and revalidated on 26.930.21537.
 
 ## What changed in Space
@@ -58,7 +60,7 @@ This was distinct from the durable-transport failure above. With the same proxy 
 
 The evidence points to a client/backend checkpoint-schema rollout mismatch in 26.928.31416, not a Codex Proxy routing failure. Do not mutate or re-sign `ChatGPT.app` to work around this class of version-specific client regression.
 
-## Resolution on ChatGPT 26.930.21537
+## Checkpoint-only recovery on ChatGPT 26.930.21537 (not full Page acceptance)
 
 The same Page was revalidated after the app auto-updated to 26.930.21537, using the normal production proxy path (`Chromium -> 29758`, CLI/app-server -> `29759 -> 29758`). The previous checkpoint-schema failure no longer reproduced:
 
@@ -69,6 +71,6 @@ The same Page was revalidated after the app auto-updated to 26.930.21537, using 
 - the fallback `GET /pages/{page_id}?include_document_bootstrap=true&include_checkpoint=false` returned HTTP 200;
 - the app log showed the `/space/{page_id}` route without `Space Page load timed out`, `invalid_page`, or Page realtime errors.
 
-No additional proxy-route patch was required for this regression. A full app quit/relaunch is required after an in-place ChatGPT update: the bundle version on disk can advance while the already-running process still has the previous frontend bundle loaded. The launcher now stamps the installed `CFBundleVersion` into `CODEX_PROXY_APP_BUILD` at launch and `--verify-current` rejects a running process whose marker is missing or differs from the installed build. Do not infer the running client version from `Info.plist` alone.
+No additional route patch was needed for the checkpoint response itself, but the separate Page realtime transport still required repair. A full app quit/relaunch is required after an in-place ChatGPT update: the bundle version on disk can advance while the already-running process still has the previous frontend bundle loaded. The launcher now stamps the installed `CFBundleVersion` into `CODEX_PROXY_APP_BUILD` at launch and `--verify-current` rejects a running process whose marker is missing or differs from the installed build. Do not infer the running client version from `Info.plist` alone.
 
 If the proxy verification passes but a future desktop version shows a similar Page-only failure, first distinguish an HTTP/WSS reachability failure from a client-side Page schema/rollout failure before changing proxy topology.

@@ -107,3 +107,7 @@ RUNTIME="$HOME/Library/Application Support/Codex Proxy"
 ## 清理现场
 
 测试和构建产生的临时目录应在任务完成后删除。仓库中的 `.gitignore` 已忽略 runtime、日志、证书和本地配置；如果为了复现必须保留某个文件，请在同一目录写明用途、来源、敏感性和清理方式的 README，并确认其中没有凭据或 CA 私钥。
+
+## Page realtime companion
+
+`bin/pages-realtime-proxy.py` is launched by the proxy launcher with the `python3` beside `MITMDUMP_PATH`; that environment must include the repository requirements. It starts the official app through a private CDP pipe, routes only approved Page realtime sockets through the HTTP upstream, and exits with its app process. `pages-status.json` records process/build identifiers and aggregate connection counts only; `pages-status.json.lock` prevents duplicate companions. No token or document body is written there. Launcher verification distinguishes adapter readiness from actual Page document acceptance. See `PAGES_REALTIME_FIX_20261003.md` in the repository for compatibility and rollback details.

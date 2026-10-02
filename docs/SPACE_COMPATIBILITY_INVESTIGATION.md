@@ -69,4 +69,6 @@ The same Page was revalidated after the app auto-updated to 26.930.21537, using 
 - the fallback `GET /pages/{page_id}?include_document_bootstrap=true&include_checkpoint=false` returned HTTP 200;
 - the app log showed the `/space/{page_id}` route without `Space Page load timed out`, `invalid_page`, or Page realtime errors.
 
-No additional proxy-route patch was required for this regression. If the proxy verification passes but a future desktop version shows a similar Page-only failure, first distinguish an HTTP/WSS reachability failure from a client-side Page schema/rollout failure before changing proxy topology.
+No additional proxy-route patch was required for this regression. A full app quit/relaunch is required after an in-place ChatGPT update: the bundle version on disk can advance while the already-running process still has the previous frontend bundle loaded. The launcher now stamps the installed `CFBundleVersion` into `CODEX_PROXY_APP_BUILD` at launch and `--verify-current` rejects a running process whose marker is missing or differs from the installed build. Do not infer the running client version from `Info.plist` alone.
+
+If the proxy verification passes but a future desktop version shows a similar Page-only failure, first distinguish an HTTP/WSS reachability failure from a client-side Page schema/rollout failure before changing proxy topology.

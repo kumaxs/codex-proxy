@@ -81,6 +81,11 @@ log_info() { print -r -- "[INFO] $*"; }
 log_warn() { print -u2 -r -- "[WARN] $*"; }
 log_error() { print -u2 -r -- "[ERROR] $*"; }
 
+installed_chatgpt_build() {
+  local info_plist="${CHATGPT_EXECUTABLE:h:h}/Info.plist"
+  /usr/bin/plutil -extract CFBundleVersion raw -o - "$info_plist" 2>/dev/null
+}
+
 parse_pid() {
   print -r -- "${1%%$'\t'*}"
 }
@@ -553,6 +558,18 @@ verify_current() {
   fi
 
   env_command="$(environment_command_for_pid "${main_pids[1]}")"
+  if (( TEST_MODE == 0 )); then
+    local installed_build running_build
+    installed_build="$(installed_chatgpt_build)" || {
+      log_error "Unable to read the installed ChatGPT build number."
+      return 1
+    }
+    running_build="$(env_value "$env_command" "CODEX_PROXY_APP_BUILD" 2>/dev/null)" || running_build=""
+    if [[ -z "$running_build" || "$running_build" != "$installed_build" ]]; then
+      log_error "Running ChatGPT build marker (${running_build:-missing}) does not match installed build ${installed_build}; a full quit and proxied relaunch is required after an app update."
+      return 1
+    fi
+  fi
   if ! command_has_exact_env "$env_command" "CODEX_APP_SERVER_FORCE_CLI" "1"; then
     log_error "ChatGPT main process is missing CODEX_APP_SERVER_FORCE_CLI=1 required for durable Space/Page compatibility."
     return 1
@@ -794,6 +811,11 @@ acquire_launch_lock() {
 }
 
 launch_chatgpt() {
+  local installed_build
+  installed_build="$(installed_chatgpt_build)" || {
+    log_error "Unable to read the installed ChatGPT build number."
+    return 1
+  }
   /usr/bin/nohup /usr/bin/env \
     "${CLEAR_PROXY_ENV_ARGS[@]}" \
     HTTP_PROXY="$RELAY_URL" \
@@ -804,6 +826,7 @@ launch_chatgpt() {
     SSL_CERT_FILE="$RELAY_CA" \
     NODE_EXTRA_CA_CERTS="$RELAY_CA" \
     CODEX_APP_SERVER_FORCE_CLI=1 \
+    CODEX_PROXY_APP_BUILD="$installed_build" \
     NO_PROXY="$NO_PROXY_VALUE" \
     no_proxy="$NO_PROXY_VALUE" \
     "$CHATGPT_EXECUTABLE" "--proxy-server=$BROWSER_PROXY_URL" >> "$LAUNCHER_LOG" 2>&1 </dev/null &

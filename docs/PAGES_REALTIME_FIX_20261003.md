@@ -23,7 +23,7 @@ The helper uses `python3` beside the configured `mitmdump` executable. Install `
 - Temporary end-to-end test: upstream WebSocket 101, real Page document editor containing 834 characters, repeated observations without the two reported error states.
 - Companion test: the existing guide reopened successfully, including a subsequent opening in about one second; the real Page editor remained populated during an additional 45-second observation. The first transition out of the old temporary adapter did not complete within 35 seconds, so it is not counted as a successful trial.
 - Private-pipe lifecycle test: a separate empty-profile ChatGPT instance acquired its renderer adapter; closing only that test instance stopped its helper. The user's existing application stayed running.
-- Nine focused Python tests cover endpoint restrictions, authenticated URL construction, TLS policy, cancellation, retry after failure and sanitized errors.
+- Ten focused Python tests cover endpoint restrictions, authenticated URL construction, TLS policy, cancellation, retry after failure and sanitized errors.
 - Existing launcher process/environment/socket fixture suite passed.
 
 ## Deployment and remaining acceptance
@@ -37,3 +37,15 @@ The authenticated account's complete quit/relaunch acceptance remains separate f
 Rollback: restore the backed-up legacy launcher and stop only the matching Page helper; the existing relay and official app are not replaced. A normal app restart discards all renderer-side adapter state.
 
 Focused tests: `python3 -m unittest discover -s tests -p 'test_pages_proxy.py' -v`.
+
+## Live deployment acceptance (same session)
+
+The helper and legacy launcher were installed with a rollback backup at `~/.codex/proxy/backups/20261003-pages-realtime-003007`. ChatGPT itself was not exited or restarted.
+
+With the installed companion, three repeated guide openings displayed the actual 834-character Page document, with no connection/open error. The observed checks completed in 1.14, 1.14 and 1.04 seconds; these are repeated-open observations, not a cold-cache performance benchmark. Another 45-second observation remained successful.
+
+A subsequent replacement of only the Page helper deliberately interrupted its transport. The installed helper reconnected automatically (WebSocket 101), received 17 frames at the recorded check, and the existing Page still displayed its 834-character document with neither reported error. The ChatGPT PID remained unchanged. This verifies this specific companion-replacement recovery, not every possible network outage.
+
+All 10 focused tests passed. The existing launcher fixture and zsh syntax suites passed. `codesign --verify --deep --strict` still accepted the official ChatGPT application. Complete quit/relaunch with the user's logged-in profile is the only remaining acceptance step; the isolated private-pipe startup/lifecycle test already passed.
+
+Installed Page helper SHA-256: `26b97c97d643716e146ef674b24451fab17d983f5f11626bdd2576966877b112`.

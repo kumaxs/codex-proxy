@@ -280,7 +280,12 @@ class PagesProxy:
                 sock = self.channels[key].get("sock")
                 if sock is None:
                     raise ValueError("Page connection is not ready")
-                sock.send(content)
+                try:
+                    sock.send(content)
+                except Exception as error:
+                    # A dropped Page socket must not stop other Pages or the helper.
+                    self.emit(key, {"type": "error", "name": type(error).__name__, "message": "Page proxy connection failed"})
+                    self.emit(key, {"type": "close", "code": 1006, "reason": ""})
             elif data["action"] == "close":
                 self.stop_channel(key)
 

@@ -98,5 +98,21 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(h.messages.get_nowait()[1]['type'], 'close')
         self.assertTrue(h.messages.empty())
 
+    def test_send_failure_is_local_to_one_page(self):
+        h = self.helper()
+        class ClosedSocket:
+            def send(self, content): raise OSError('connection closed token=SECRET')
+        key = ('session', 1, '1')
+        h.sessions = {'session': {}}
+        h.channels = {key: {'sock': ClosedSocket()}, ('other', 2, '2'): {}}
+        h.event({'method': 'Runtime.bindingCalled', 'sessionId': 'session', 'params': {
+            'name': module.BINDING, 'executionContextId': 1,
+            'payload': json.dumps({'action': 'send', 'id': '1', 'data': 'test'})}})
+        events = [h.messages.get_nowait()[1] for _ in range(2)]
+        self.assertEqual([e['type'] for e in events], ['error', 'close'])
+        self.assertNotIn('SECRET', json.dumps(events))
+        self.assertTrue(h.running.is_set())
+        self.assertIn(('other', 2, '2'), h.channels)
+
 if __name__ == '__main__':
     unittest.main()

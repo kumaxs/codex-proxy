@@ -100,6 +100,8 @@ bin/launch-codex-proxied.sh --config "$CONFIG" --verify-current
 
 `--verify-current` 会确认主进程带有正确 `--proxy-server`、Chromium NetworkService 已连接 configured upstream、主进程具有 `CODEX_APP_SERVER_FORCE_CLI=1`，并逐个检查 direct-child Codex app-server 的身份与代理边界。不要使用 `--ignore-certificate-errors`，也不要修改官方 `ChatGPT.app`、重签名应用或扩大系统 CA 信任。
 
+如果 `--verify-current` 通过，但 ChatGPT 26.928.31416 出现“Space 能开、Pages 一直加载、页面使用指南提示无法连接/无法打开”，不要继续改代理路由。该版本曾出现 Page checkpoint HTTP 200 后被客户端以 `metadata.checkpoint` schema 不兼容拒绝的 rollout 问题；同一路径在 26.930.21537 已不再复现，`realtime-token` 与 document bootstrap 均为 HTTP 200。先升级/重启当前 ChatGPT 并重新验证，再决定是否需要代理改动。详见 [SPACE_COMPATIBILITY_INVESTIGATION.md](SPACE_COMPATIBILITY_INVESTIGATION.md)。
+
 ## 6. Responses 出现 `retry 5/5` 或 WebSocket 断开
 
 先确认 relay、upstream 和进程 socket 都经过同一配置：

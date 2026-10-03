@@ -1,6 +1,6 @@
 # Space Page realtime repair — 2026-10-03
 
-**Rendering follow-up:** transport acceptance did not establish correct guide formatting. The installed Chinese guide template has no line breaks, producing the malformed document reported by the user. See [the confirmed diagnosis and unapplied repair status](GUIDE_FORMAT_DIAGNOSIS_20261003.md).
+**Rendering follow-up:** transport acceptance did not establish correct guide formatting. The installed Chinese guide template has no line breaks, producing the malformed document reported by the user. See [the confirmed diagnosis and native repair status](GUIDE_FORMAT_DIAGNOSIS_20261003.md).
 
 ## Corrected diagnosis
 

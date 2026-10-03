@@ -1,5 +1,7 @@
 # Space Page realtime repair — 2026-10-03
 
+**Rendering follow-up:** transport acceptance did not establish correct guide formatting. The installed Chinese guide template has no line breaks, producing the malformed document reported by the user. See [the confirmed diagnosis and unapplied repair status](GUIDE_FORMAT_DIAGNOSIS_20261003.md).
+
 ## Corrected diagnosis
 
 The earlier checkpoint/HTTP-200 checks did **not** establish that a Page document opened. The reported resolution on 26.930.21537 was incomplete. Space metadata, the durable CLI host and the Page document's realtime socket are different paths.
@@ -46,6 +48,6 @@ With the installed companion, three repeated guide openings displayed the actual
 
 A subsequent replacement of only the Page helper deliberately interrupted its transport. The installed helper reconnected automatically (WebSocket 101), received 17 frames at the recorded check, and the existing Page still displayed its 834-character document with neither reported error. The ChatGPT PID remained unchanged. This verifies this specific companion-replacement recovery, not every possible network outage.
 
-All 10 focused tests passed. The existing launcher fixture and zsh syntax suites passed. `codesign --verify --deep --strict` still accepted the official ChatGPT application. Complete quit/relaunch with the user's logged-in profile is the only remaining acceptance step; the isolated private-pipe startup/lifecycle test already passed.
+All 10 focused tests passed. The existing launcher fixture and zsh syntax suites passed. `codesign --verify --deep --strict` still accepted the official ChatGPT application. The isolated private-pipe startup/lifecycle test passed. This was transport-only acceptance: a later user report exposed a separate guide-formatting defect, so it was incorrect to describe restart as the only remaining acceptance step.
 
 Installed Page helper SHA-256: `26b97c97d643716e146ef674b24451fab17d983f5f11626bdd2576966877b112`.

@@ -193,9 +193,11 @@ validate_http_proxy_url() {
     return 1
   fi
 
-  if [[ -n "$port" && ( ! "$port" == <-> || (( port < 1 || port > 65535 )) ) ]]; then
-    print -u2 "Invalid proxy URL port in '$value'."
-    return 1
+  if [[ -n "$port" ]]; then
+    if [[ "$port" != <-> ]] || (( port < 1 || port > 65535 )); then
+      print -u2 "Invalid proxy URL port in '$value'."
+      return 1
+    fi
   fi
 
   return 0

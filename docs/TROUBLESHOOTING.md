@@ -116,6 +116,14 @@ bin/launch-codex-proxied.sh --config "$CONFIG" --verify-current
 
 仓库中 `5/5` 观察只针对某一类 Responses WebSocket 重试问题。即使完整探针通过，也不能保证 Remote、图片或其他 Responses 模式；不要把这个计数解释成全局修复承诺。启动器在验证失败时不会主动另行普通启动，但 GUI/Chromium 等子进程是否遵守环境变量仍需业务验证。
 
+### 6.1 空闲约一分钟后 WebSocket 断开
+
+`tcp_timeout=900` 只控制本地 mitmproxy 的 TCP 空闲超时；`http2_ping_keepalive=10` 仅作用于 HTTP/2，不能替代 WebSocket PING。当前 relay 对标准 `:443` 的 TLS/WSS 使用 `--ignore-hosts` 透传，因此无法在不终止端到端 TLS 的情况下向**既有** WebSocket 连接注入 PING。向其他连接周期性发送 HTTP 请求也不会维持这条 WebSocket。不要为此增加注入插件、TLS 解密或后台保活服务。
+
+排查时先使用**同一台主机、同一 WebSocket 回显服务**对比两个 HTTP CONNECT upstream：完成 TLS/101 握手与短消息回显，分别空闲超过 120 秒后再次发消息。2026-10-08 在 Hermes-1 上，原 Upnet upstream 的连接约 61 秒断开（125 秒后发送报 Broken pipe）；经已有 NAS HTTP CONNECT upstream 的同一测试在 125 秒后收发正常。这个结果仅证实测试时的出口差异，不代表任何出口都永久不会掉线。正式切换仍须先对新链路运行独立 relay 的 WSS 空闲测试，再验证生产 ChatGPT 长任务。
+
+排查优先级：稳定且支持长连接的现有 upstream > 修改 upstream 的空闲超时 > **客户端自身已经支持的** WebSocket PING（如受支持 build 的 Page companion）。对未知 ChatGPT/Codex 私有帧格式，不要注入任意文本或应用消息。未登录时，`ws.chatgpt.com` 的 HTTP 401/403/404 只能证明目标可达，不能证明长任务稳定。
+
 ## 7. Remote 离线、图片失败或业务结果不一致
 
 Remote 和图片必须由真实业务操作验证，例如在目标工作区中实际建立 Remote 连接、发送一条业务消息并上传/加载一张图片。脚本的 HTTP/WebSocket 探针只能证明 transport surface 到达，不能证明账号、工作区、权限、图片处理或服务端状态。

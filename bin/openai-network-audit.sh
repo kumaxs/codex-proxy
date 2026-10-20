@@ -110,7 +110,7 @@ if [[ -f "$cfg_path" ]]; then
   proxy_url="${proxy_url:-$CODEX_PROXY_RELAY_URL}"
   cfg_loaded=1
   if (( ca_option_provided == 0 )); then
-    ca_file="${ca_file:-$CODEX_PROXY_CA_CERT}"
+    ca_file="${ca_file:-$(codex_proxy_effective_ca)}"
   fi
 elif (( cfg_path_provided == 1 )); then
   print -u2 "Config file not found: $cfg_path"
@@ -409,17 +409,17 @@ run_codex_doctor_check() {
   fi
 
   if (( doctor_exit != 0 )); then
-    print -u2 "codex doctor exited with $doctor_exit before confirming HTTP 101"
+    print -u2 "codex doctor exited with $doctor_exit before confirming WebSocket reachability"
     return 1
   fi
 
-  if [[ "$ca_mode" == "system" ]]; then
-    print -u2 "codex doctor did not report HTTP 101 while in --system-ca mode"
-    return 1
+  if /usr/bin/python3 "$SCRIPT_DIR/../lib/doctor-result.py" "$output_file"; then
+    print "codex doctor: WebSocket reachability is ok (current structured schema)"
+    return 0
   fi
 
-  print "codex doctor: no HTTP 101 in output (advisory in --ca-file mode)"
-  return 0
+  print -u2 "codex doctor did not confirm WebSocket reachability (unrecognized or failing schema)"
+  return 1
 }
 
 CRITICAL_SERVICE_CHECKS=(

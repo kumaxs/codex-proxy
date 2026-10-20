@@ -5,6 +5,7 @@ Normal launches use a private CDP pipe (no debug TCP listener). Attach mode is
 only for a pre-existing, verified loopback debug session during deployment.
 """
 import argparse
+import hashlib
 import fcntl
 import json
 import os
@@ -14,6 +15,7 @@ import queue
 import re
 import signal
 import ssl
+import struct
 import subprocess
 import tempfile
 import threading
@@ -23,6 +25,9 @@ import urllib.request
 import websocket
 
 BUILD = "12776"  # ChatGPT 26.930.21537: validated renderer transport call site.
+NATIVE_BROWSER_BUILD = "20770"  # ChatGPT 26.1013.40934 uses the Chromium WebSocket.
+NATIVE_BROWSER_ASSET = "webview/assets/app-initial-90eb42395b7d.js"
+NATIVE_BROWSER_SHA256 = "292e673df7d1088354e54573a1183b343dfd2814eebd8e6d6281704db76368e3"
 SCRIPT_PATTERN = r"/assets/app-initial-60d038a052d7\.js$"
 LINE, COLUMN = 1602, 143900
 BINDING = "__codexPageProxySend"
@@ -75,6 +80,41 @@ def proxy_address(url):
     if u.scheme != "http" or not u.hostname or u.username is not None or u.password is not None or u.path not in ("", "/") or u.query or u.fragment:
         raise ValueError("Page transport currently requires a credential-free HTTP upstream")
     return u.hostname, u.port or 80
+
+
+def native_browser_supported(app):
+    """Validate the exact shipped Page WebSocket call site, not just a build number.
+
+    This build uses Chromium's own new WebSocket(), which honors --proxy-server.
+    Do not inject the legacy Node transport adapter into this renderer.
+    """
+    archive = app.parent.parent / "Resources" / "app.asar"
+    try:
+        with archive.open("rb") as src:
+            if struct.unpack("<I", src.read(4))[0] != 4:
+                return False
+            src.seek(12)
+            header_len = struct.unpack("<I", src.read(4))[0]
+            if not 0 < header_len <= 8 * 1024 * 1024:
+                return False
+            header = json.loads(src.read(header_len))
+            asset = header["files"]
+            for part in NATIVE_BROWSER_ASSET.split("/"):
+                asset = asset[part]
+                if "files" in asset:
+                    asset = asset["files"]
+            size, offset = int(asset["size"]), int(asset["offset"])
+            if not 0 < size <= 16 * 1024 * 1024 or offset < 0:
+                return False
+            src.seek(16 + header_len + offset)
+            data = src.read(size)
+        return (
+            hashlib.sha256(data).hexdigest() == NATIVE_BROWSER_SHA256
+            and b"new WebSocket(a.toString(),o)" in data
+            and b"pages-realtime-room." in data
+        )
+    except (OSError, ValueError, KeyError, TypeError, struct.error, UnicodeError):
+        return False
 
 
 def identity(pid, app):
@@ -378,8 +418,17 @@ def main():
     with open(args.app.parent.parent / "Info.plist", "rb") as f:
         build = str(plistlib.load(f)["CFBundleVersion"])
     proxy_address(args.proxy)
+    native_browser = build == NATIVE_BROWSER_BUILD and native_browser_supported(args.app)
+    if native_browser:
+        # This verified build implements Page realtime with the normal browser socket.
+        # Its Chromium proxy is checked by the launcher; no CDP injection is needed.
+        if args.mode == "launch":
+            extra = args.app_args[1:] if args.app_args[:1] == ["--"] else args.app_args
+            os.execve(str(args.app), [str(args.app), *extra], dict(os.environ))
+        print("[PAGES] native Chromium Page WebSocket call site verified for build " + build + "; actual Page content still requires business acceptance", flush=True)
+        return
     if build != BUILD:
-        print("[PAGES] unsupported ChatGPT build " + build + "; Page adaptation disabled, Chromium/CLI proxy remains available", flush=True)
+        print("[PAGES] unsupported ChatGPT build or asset " + build + "; Page adaptation disabled, Chromium/CLI proxy remains available", flush=True)
         if args.mode == "launch":
             extra = args.app_args[1:] if args.app_args[:1] == ["--"] else args.app_args
             os.execve(str(args.app), [str(args.app), *extra], dict(os.environ))

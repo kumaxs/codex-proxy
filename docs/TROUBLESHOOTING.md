@@ -86,7 +86,7 @@ bin/proxy-health.sh --config "$CONFIG" --http-only
 bin/launch-codex-proxied.sh --config "$CONFIG" --preflight
 ```
 
-launcher 会为 ChatGPT 主进程设置 `CODEX_CA_CERTIFICATE`、`SSL_CERT_FILE`、`NODE_EXTRA_CA_CERTS`、HTTP(S) proxy 和 `CODEX_APP_SERVER_FORCE_CLI=1`，并移除 `ALL_PROXY`、SOCKS/WS/FTP 及常见 Git/npm 代理覆盖变量。当前桌面端生成的 Codex app-server 可能不保留 `NODE_EXTRA_CA_CERTS`；只要其余代理边界正确，这不再判为故障。项目不会把 CA 安装到系统钥匙串或系统信任库。
+launcher 在默认 `.*:443$` 透传模式下以系统 CA 设置 `CODEX_CA_CERTIFICATE`、`SSL_CERT_FILE`、`NODE_EXTRA_CA_CERTS`，在旧 MITM 模式下使用 relay CA；同时设置 HTTP(S) proxy 和 `CODEX_APP_SERVER_FORCE_CLI=1`，并移除 `ALL_PROXY`、SOCKS/WS/FTP 及常见 Git/npm 代理覆盖变量。当前桌面端生成的 Codex app-server 可能不保留 `NODE_EXTRA_CA_CERTS`；只要其余代理边界正确，这不再判为故障。项目不会把 CA 安装到系统钥匙串或系统信任库。
 
 ## 5. Space / Pages 页面打不开
 
@@ -120,9 +120,17 @@ bin/launch-codex-proxied.sh --config "$CONFIG" --verify-current
 
 `tcp_timeout=900` 只控制本地 mitmproxy 的 TCP 空闲超时；`http2_ping_keepalive=10` 仅作用于 HTTP/2，不能替代 WebSocket PING。当前 relay 对标准 `:443` 的 TLS/WSS 使用 `--ignore-hosts` 透传，因此无法在不终止端到端 TLS 的情况下向**既有** WebSocket 连接注入 PING。向其他连接周期性发送 HTTP 请求也不会维持这条 WebSocket。不要为此增加注入插件、TLS 解密或后台保活服务。
 
-排查时先使用**同一台主机、同一 WebSocket 回显服务**对比两个 HTTP CONNECT upstream：完成 TLS/101 握手与短消息回显，分别空闲超过 120 秒后再次发消息。2026-10-08 在 Hermes-1 上，原 Upnet upstream 的连接约 61 秒断开（125 秒后发送报 Broken pipe）；经已有 NAS HTTP CONNECT upstream 的同一测试在 125 秒后收发正常。这个结果仅证实测试时的出口差异，不代表任何出口都永久不会掉线。正式切换仍须先对新链路运行独立 relay 的 WSS 空闲测试，再验证生产 ChatGPT 长任务。
+排查时先使用**同一台主机、同一 WebSocket 回显服务**对比两个 HTTP CONNECT upstream：完成 TLS/101 握手与短消息回显，分别空闲超过 120 秒后再次发消息。2026-10-08 在 macOS 验证机上，原 Upnet upstream 的连接约 61 秒断开（125 秒后发送报 Broken pipe）；经已有 NAS HTTP CONNECT upstream 的同一测试在 125 秒后收发正常。这个结果仅证实测试时的出口差异，不代表任何出口都永久不会掉线。正式切换仍须先对新链路运行独立 relay 的 WSS 空闲测试，再验证生产 ChatGPT 长任务。
 
 排查优先级：稳定且支持长连接的现有 upstream > 修改 upstream 的空闲超时 > **客户端自身已经支持的** WebSocket PING（如受支持 build 的 Page companion）。对未知 ChatGPT/Codex 私有帧格式，不要注入任意文本或应用消息。未登录时，`ws.chatgpt.com` 的 HTTP 401/403/404 只能证明目标可达，不能证明长任务稳定。
+
+## 6.2 2026-10-20 桌面端构建 20770 适配
+
+构建 20770 的 Pages realtime 已改为 Chromium 内的原生 `new WebSocket()`。适配器验证安装包中 JS 的完整 SHA-256 后使用这一原生实现，不再对未知前端脚本设置 CDP 断点。验证通过只能说明代理路由和代码匹配，不能替代已登录的页面打开。
+
+在当前 macOS 构建中，Codex `doctor --json` 返回 `checks.network.websocket_reachability.status`，而不是旧版文本 `handshake result`。脚本接受这两类经过确认的结果，同时拒绝返回失败或未知状态的检查。
+
+2026-10-20 的对照测试表明，原 relay 对 TLS 443 全量拦截时，未注入本地 CA 的客户端会遇到 `curl 60`；独立的 `--ignore-hosts '.*:443$'` relay 经系统证书验证正常。新装默认进行 TLS 透传，使用系统 CA，既不修改 ChatGPT 官方应用，也不向 macOS 全局证书库加证书。网络质量与上传业务还必须分别验证。
 
 ## 7. Remote 离线、图片失败或业务结果不一致
 

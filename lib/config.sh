@@ -483,3 +483,14 @@ codex_proxy_load_config() {
 codex_proxy_config_is_loaded() {
   [[ "$CODEX_PROXY_LOADED" == 1 ]]
 }
+
+# The opt-in native TLS passthrough policy must not use mitmproxy's signing CA
+# to validate origin certificates. macOS provides a normal trust bundle here.
+codex_proxy_effective_ca() {
+  if [[ "$CODEX_PROXY_PASSTHROUGH_REGEX" == '.*:443$' ]]; then
+    [[ -r /etc/ssl/cert.pem ]] || return 1
+    print -r -- /etc/ssl/cert.pem
+  else
+    print -r -- "$CODEX_PROXY_CA_CERT"
+  fi
+}

@@ -611,6 +611,15 @@ EOF_FAKE_MITMDUMP
     /usr/bin/env CODEX_PROXY_HOME="$relay_link_home" CODEX_PROXY_TEST_ENV_OUTPUT="$env_report" \
       /bin/zsh "$SCRIPT_DIR/../bin/relay.sh" --config "$relay_cfg"
 
+  # New 443 passthrough installs trust the real origin; legacy interception
+  # configs retain their per-user CA instead of silently changing semantics.
+  assert_eq "TLS passthrough selects system CA" \
+    "$(CODEX_PROXY_PASSTHROUGH_REGEX='.*:443$' CODEX_PROXY_CA_CERT=/private/tmp/legacy-cert.pem codex_proxy_effective_ca)" \
+    "/etc/ssl/cert.pem"
+  assert_eq "legacy interception keeps relay CA" \
+    "$(CODEX_PROXY_PASSTHROUGH_REGEX='^localhost$' CODEX_PROXY_CA_CERT=/private/tmp/legacy-cert.pem codex_proxy_effective_ca)" \
+    "/private/tmp/legacy-cert.pem"
+
   print "config parser tests passed"
 }
 

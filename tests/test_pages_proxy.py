@@ -1,8 +1,11 @@
 import importlib.util
+import hashlib
 import json
 import pathlib
 import queue
 import ssl
+import struct
+import tempfile
 import threading
 import unittest
 from unittest.mock import patch
@@ -45,6 +48,33 @@ class EndpointTests(unittest.TestCase):
         self.assertEqual(module.proxy_address('http://127.0.0.1:29758'), ('127.0.0.1', 29758))
         for url in ['socks5://localhost:1', 'http://u:p@localhost:1', 'http://localhost:1/path']:
             with self.assertRaises(ValueError): module.proxy_address(url)
+
+class NativeBrowserTests(unittest.TestCase):
+    def test_exact_native_browser_asset(self):
+        # A tiny ASAR fixture tests archive parsing and the content fingerprint.
+        script = b"pages-realtime-room. -- new WebSocket(a.toString(),o)"
+        asset_name = module.NATIVE_BROWSER_ASSET.rsplit("/", 1)[-1]
+        header = {"files": {"webview": {"files": {"assets": {"files": {
+            asset_name: {"size": len(script), "offset": "0"}
+        }}}}}}
+        with tempfile.TemporaryDirectory() as temp:
+            contents = pathlib.Path(temp) / "ChatGPT.app" / "Contents"
+            (contents / "Resources").mkdir(parents=True)
+            app = contents / "MacOS" / "ChatGPT"
+            data = json.dumps(header).encode("utf-8")
+            asar = contents / "Resources" / "app.asar"
+            asar.write_bytes(struct.pack("<IIII", 4, len(data) + 4,
+                                         len(data), len(data)) + data + script)
+            with patch.object(module, "NATIVE_BROWSER_SHA256", hashlib.sha256(script).hexdigest()):
+                self.assertTrue(module.native_browser_supported(app))
+                # A one-byte modification must not accidentally enable the adapter.
+                asar.write_bytes(asar.read_bytes()[:-1] + b"x")
+                self.assertFalse(module.native_browser_supported(app))
+            self.assertFalse(module.native_browser_supported(app))
+
+    def test_missing_archive_fails_closed(self):
+        self.assertFalse(module.native_browser_supported(pathlib.Path("/missing/Contents/MacOS/ChatGPT")))
+
 
 class FakeSocket:
     def __init__(self): self.items = iter(['{"type":"test"}', ''])

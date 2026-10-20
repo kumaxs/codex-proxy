@@ -2,7 +2,7 @@
 
 ## 已查明的原因
 
-在 Hermes-1 已安装的 ChatGPT 26.930.21537 / build 12776 中，中文语言资源 `webview/assets/zh-CN-3ed9eb1db28a.js` 的 `space.gettingStartedPages.starterBody.guide` 模板值包含 **0 个换行符**。
+在 macOS 验证机 已安装的 ChatGPT 26.930.21537 / build 12776 中，中文语言资源 `webview/assets/zh-CN-3ed9eb1db28a.js` 的 `space.gettingStartedPages.starterBody.guide` 模板值包含 **0 个换行符**。
 
 实际页面与这个模板一致：全文挤入一个引用块；提示块、二级标题、任务清单、可视化示例和提示词代码块的标记混在行内。原生辅助功能接口读出的“页面文档”内容也保留了这些标记。内联加粗和行内代码已经渲染，不是整页 CSS 完全未加载。
 

@@ -75,7 +75,7 @@ readonly RELAY_HOST="${CODEX_PROXY_LISTEN_HOST}"
 readonly RELAY_PORT="${CODEX_PROXY_LISTEN_PORT}"
 readonly UPSTREAM_HOST="$CODEX_PROXY_UPSTREAM_HOST"
 readonly UPSTREAM_PORT="$CODEX_PROXY_UPSTREAM_PORT"
-readonly RELAY_CA="$CODEX_PROXY_CA_CERT"
+readonly RELAY_CA="$(codex_proxy_effective_ca)"
 CODEX_BINARY="$(codex_proxy_resolve_bundled_codex "$CODEX_PROXY_CHATGPT_APP_PATH")" || exit 1
 readonly CODEX_BINARY
 readonly NO_PROXY_VALUE="localhost,127.0.0.1,::1"
@@ -255,18 +255,17 @@ set +e
 doctor_rc=$?
 set -e
 
-if /usr/bin/grep -Fq '"handshake result": "HTTP 101 Switching Protocols"' "$tmp_json" && (( doctor_rc == 0 )); then
-  print "Codex WebSocket handshake passed (HTTP 101)."
-elif /usr/bin/grep -Fq '"handshake result": "HTTP 101 Switching Protocols"' "$tmp_json"; then
-  print -u2 "Codex doctor reached WebSocket HTTP 101 but reported another failed check (exit $doctor_rc)."
-else
-  print -u2 "Codex doctor did not confirm a WebSocket HTTP 101 handshake (exit $doctor_rc). HTTPS fallback remains available."
-fi
-
-if ! /usr/bin/grep -Fq '"handshake result": "HTTP 101 Switching Protocols"' "$tmp_json" || (( doctor_rc != 0 )); then
+# Current Codex uses checks.network.websocket_reachability.status rather than
+# the legacy free-form handshake string. Exit status is still mandatory.
 doctor_ok=1
+if (( doctor_rc == 0 )) && {
+  /usr/bin/grep -Fq '"handshake result": "HTTP 101 Switching Protocols"' "$tmp_json" ||
+  /usr/bin/python3 "$SCRIPT_DIR/../lib/doctor-result.py" "$tmp_json"
+}; then
+  doctor_ok=0
+  print "Codex doctor WebSocket reachability passed."
 else
-doctor_ok=0
+  print -u2 "Codex doctor WebSocket check failed or returned an unrecognized result (exit $doctor_rc)."
 fi
 
 websocket_checks_ok=0

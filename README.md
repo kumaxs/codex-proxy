@@ -27,7 +27,7 @@ flowchart LR
   subgraph P[用户显式启动的进程范围]
     L[Codex Proxy.app 或 launch-codex-proxied.sh] --> C[ChatGPT.app + Codex helper]
     C -->|Chromium / WebView<br/>--proxy-server| U
-    C -->|Node realtime + Codex app-server<br/>HTTP_PROXY / HTTPS_PROXY + CA| R[loopback relay<br/>127.0.0.1:29759]
+    C -->|Node realtime + Codex app-server<br/>HTTP_PROXY / HTTPS_PROXY + origin CA| R[loopback relay<br/>127.0.0.1:29759]
   end
 
   subgraph H[本机服务]
@@ -159,11 +159,11 @@ bin/launch-codex-proxied.sh --config "$CONFIG" --launch-and-verify
 | `CHATGPT_APP_PATH` | 官方 ChatGPT `Contents/MacOS/ChatGPT` 绝对路径。 |
 | `PASSTHROUGH_REGEX` | 传给 mitmdump `--ignore-hosts` 的扩展正则；空值表示不设置该参数。 |
 
-`PASSTHROUGH_REGEX` 是 mitmproxy 的 **ignore-hosts 精确语义**：脚本把字符串原样作为一个 `--ignore-hosts` 参数传入，匹配的主机跳过 TLS interception；这不是系统代理白名单，也不是 launcher 的直连回退开关。匹配后的具体转发方式由 mitmproxy 当前 mode（本项目默认是 upstream mode）决定。默认安装值只匹配 `localhost`、`127.0.0.1` 和 `::1`；如需其他主机，必须显式传入正则。具体匹配细节以所用 mitmproxy 版本为准。
+`PASSTHROUGH_REGEX` 是 mitmproxy 的 **ignore-hosts 精确语义**：脚本把字符串原样作为一个 `--ignore-hosts` 参数传入，匹配的主机跳过 TLS interception；这不是系统代理白名单，也不是 launcher 的直连回退开关。匹配后的具体转发方式由 mitmproxy 当前 mode（本项目默认是 upstream mode）决定。默认安装值 `.*:443$` 对标准 TLS/WSS 443 进行端到端证书透传；此模式下 CLI 使用 macOS 系统 CA。原有显式自定义 MITM 配置不自动改写。具体匹配细节以所用 mitmproxy 版本为准。
 
 ## MITM 安全边界与隐私
 
-relay 使用 mitmproxy 的本地 CA 来解密和重新签发 HTTPS 流量，因此 relay 进程及其运行目录对**经过拦截的明文**具有可见性；这包括可能的会话内容、Remote 控制流量或图片请求元数据。请只在你有权审计的设备和网络中运行，不要把 runtime CA 发给他人。
+默认 443 TLS 透传不进行 HTTPS 解密；若用户明确覆盖 PASSTHROUGH_REGEX 以启用 TLS interception，relay 的本地 CA 会重新签发被拦截的 HTTPS，因此 relay 进程及其运行目录对**经过拦截的明文**具有可见性；这包括可能的会话内容、Remote 控制流量或图片请求元数据。请只在你有权审计的设备和网络中运行，不要把 runtime CA 发给他人。
 
 launcher 会验证 ChatGPT 主进程的 `--proxy-server` 参数、Chromium NetworkService 到 configured upstream 的实际 socket，并要求主进程具有 `CODEX_APP_SERVER_FORCE_CLI=1`。新版可能同时生成多个 direct-child Codex app-server；launcher 会逐个验证其身份和代理环境，并拒绝观察到的 direct-upstream / external-443 绕行。进程生命周期只管理当前 ChatGPT 主进程的后代；独立长期 daemon 持有的 bundle helper 不会阻塞 GUI 重启。
 
@@ -190,4 +190,4 @@ launcher 会验证 ChatGPT 主进程的 `--proxy-server` 参数、Chromium Netwo
 
 ## Space Page realtime compatibility
 
-ChatGPT 26.930.21537 / build 12776 needs the process-scoped Page companion in addition to the Chromium/CLI proxy. Install the repository requirements into the same Python environment as `mitmdump`. Normal launches use a private CDP pipe, without changing the official app or opening a debug TCP listener. Unsupported updated builds keep the ordinary proxy and explicitly report Pages as unverified. See [the repair and acceptance record](docs/PAGES_REALTIME_FIX_20261003.md).
+ChatGPT 26.1013.40934 / build 20770 uses a built-in Chromium Page WebSocket, confirmed by the exact JS bundle fingerprint: no Page companion injection is performed. An authenticated Page-open acceptance is still required. Older ChatGPT 26.930.21537 / build 12776 needs the process-scoped Page companion in addition to the Chromium/CLI proxy. Install the repository requirements into the same Python environment as `mitmdump`. Normal launches use a private CDP pipe, without changing the official app or opening a debug TCP listener. Unsupported updated builds keep the ordinary proxy and explicitly report Pages as unverified. See [the repair and acceptance record](docs/PAGES_REALTIME_FIX_20261003.md).

@@ -50,9 +50,9 @@ HTTP_PROXY=<loopback relay URL>
 HTTPS_PROXY=<loopback relay URL>
 http_proxy=<loopback relay URL>
 https_proxy=<loopback relay URL>
-CODEX_CA_CERTIFICATE=<runtime>/mitmproxy/mitmproxy-ca-cert.pem
-SSL_CERT_FILE=<同一 CA>
-NODE_EXTRA_CA_CERTS=<同一 CA>
+CODEX_CA_CERTIFICATE=/etc/ssl/cert.pem  # default :443 TLS passthrough
+SSL_CERT_FILE=/etc/ssl/cert.pem
+NODE_EXTRA_CA_CERTS=/etc/ssl/cert.pem
 CODEX_APP_SERVER_FORCE_CLI=1
 NO_PROXY=localhost,127.0.0.1,::1
 no_proxy=localhost,127.0.0.1,::1
@@ -84,7 +84,7 @@ mitmproxy 在 runtime 的 `mitmproxy/` 目录维护本地 CA。经过 intercepti
 --ignore-hosts <PASSTHROUGH_REGEX>
 ```
 
-这采用 mitmproxy `ignore-hosts` 的主机匹配语义：匹配的主机跳过 TLS interception。它不是系统代理白名单，也不会触发 launcher 的 ChatGPT 直连回退；匹配后的具体转发方式由当前 mitmproxy mode 决定，本项目默认传入 upstream mode。空值则完全不传 `--ignore-hosts`。默认安装值用于 `localhost`、`127.0.0.1` 和 `::1`，而不是任意域名。
+这采用 mitmproxy `ignore-hosts` 的主机匹配语义：匹配的主机跳过 TLS interception。它不是系统代理白名单，也不会触发 launcher 的 ChatGPT 直连回退；匹配后的具体转发方式由当前 mitmproxy mode 决定，本项目默认传入 upstream mode。空值则完全不传 `--ignore-hosts`。默认安装值 `.*:443$` 透传标准 TLS/WSS，并使用系统 CA；原有自定义正则配置保留兼容模式。
 
 ## Remote、图片与 Responses WebSocket
 

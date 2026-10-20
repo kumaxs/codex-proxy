@@ -565,9 +565,8 @@ verify_current() {
       log_error "Unable to read the installed ChatGPT build number."
       return 1
     }
-    running_build="$(env_value "$env_command" "CODEX_PROXY_APP_BUILD" 2>/dev/null)" || running_build=""
-    if [[ -z "$running_build" || "$running_build" != "$installed_build" ]]; then
-      log_error "Running ChatGPT build marker (${running_build:-missing}) does not match installed build ${installed_build}; a full quit and proxied relaunch is required after an app update."
+    if ! command_has_exact_env "$env_command" "CODEX_PROXY_APP_BUILD" "$installed_build"; then
+      log_error "ChatGPT build marker does not match installed build ${installed_build}; a full quit and proxied relaunch is required after an app update."
       return 1
     fi
   fi

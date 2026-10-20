@@ -155,9 +155,9 @@ get_listener_pids() {
   # lsof is intentionally restricted to TCP LISTEN sockets on this port.  We
   # never kill or otherwise act on a PID that is not owned by the exact
   # launchd label below.
-  lsof_output="$(/usr/sbin/lsof -nP -iTCP:"$PROXY_LISTEN_PORT" -sTCP:LISTEN -t 2>&1)"
+  lsof_output="$(/usr/sbin/lsof -w -nP -iTCP:"$PROXY_LISTEN_PORT" -sTCP:LISTEN -t 2>&1)"
   lsof_rc=$?
-  if (( lsof_rc == 1 && -z "$lsof_output" )); then
+  if (( lsof_rc == 1 )) && [[ -z "$lsof_output" ]]; then
     # lsof's documented no-match result is rc=1 with no diagnostic.
     return 0
   fi
@@ -255,7 +255,7 @@ ensure_relay_log_safe() {
     return 1
   fi
   mode_decimal=$((8#$mode))
-  if (( (mode_decimal & 0777) != 0600 )); then
+  if (( mode_decimal != 8#600 )); then
     print -u2 "[ERROR] Relay log must have mode 600: $RELAY_LOG_PATH"
     return 1
   fi

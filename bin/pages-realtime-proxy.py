@@ -25,9 +25,14 @@ import urllib.request
 import websocket
 
 BUILD = "12776"  # ChatGPT 26.930.21537: validated renderer transport call site.
-NATIVE_BROWSER_BUILD = "20770"  # ChatGPT 26.1013.40934 uses the Chromium WebSocket.
-NATIVE_BROWSER_ASSET = "webview/assets/app-initial-90eb42395b7d.js"
-NATIVE_BROWSER_SHA256 = "292e673df7d1088354e54573a1183b343dfd2814eebd8e6d6281704db76368e3"
+# Exact app.asar fingerprints for builds whose Page realtime uses Chromium's
+# native WebSocket. Unknown builds remain fail-closed and are not injected.
+NATIVE_BROWSER_ASSETS = {
+    "20770": ("webview/assets/app-initial-90eb42395b7d.js",
+              "292e673df7d1088354e54573a1183b343dfd2814eebd8e6d6281704db76368e3"),
+    "21421": ("webview/assets/app-initial-c95ddb62696e.js",
+              "6f063d287dbd012293d866f6578bc2703ab11d75b53a00273c45e36df32ce75c"),
+}
 SCRIPT_PATTERN = r"/assets/app-initial-60d038a052d7\.js$"
 LINE, COLUMN = 1602, 143900
 BINDING = "__codexPageProxySend"
@@ -82,12 +87,16 @@ def proxy_address(url):
     return u.hostname, u.port or 80
 
 
-def native_browser_supported(app):
-    """Validate the exact shipped Page WebSocket call site, not just a build number.
+def native_browser_supported(app, build):
+    """Validate the exact Page WebSocket asset fingerprint for an allowlisted build.
 
-    This build uses Chromium's own new WebSocket(), which honors --proxy-server.
-    Do not inject the legacy Node transport adapter into this renderer.
+    These builds use Chromium's native new WebSocket(), which honors
+    --proxy-server. Never inject the legacy Node adapter into this renderer.
     """
+    expected = NATIVE_BROWSER_ASSETS.get(str(build))
+    if expected is None:
+        return False
+    asset_path, expected_sha256 = expected
     archive = app.parent.parent / "Resources" / "app.asar"
     try:
         with archive.open("rb") as src:
@@ -99,7 +108,7 @@ def native_browser_supported(app):
                 return False
             header = json.loads(src.read(header_len))
             asset = header["files"]
-            for part in NATIVE_BROWSER_ASSET.split("/"):
+            for part in asset_path.split("/"):
                 asset = asset[part]
                 if "files" in asset:
                     asset = asset["files"]
@@ -109,7 +118,7 @@ def native_browser_supported(app):
             src.seek(16 + header_len + offset)
             data = src.read(size)
         return (
-            hashlib.sha256(data).hexdigest() == NATIVE_BROWSER_SHA256
+            hashlib.sha256(data).hexdigest() == expected_sha256
             and b"new WebSocket(a.toString(),o)" in data
             and b"pages-realtime-room." in data
         )
@@ -418,7 +427,7 @@ def main():
     with open(args.app.parent.parent / "Info.plist", "rb") as f:
         build = str(plistlib.load(f)["CFBundleVersion"])
     proxy_address(args.proxy)
-    native_browser = build == NATIVE_BROWSER_BUILD and native_browser_supported(args.app)
+    native_browser = native_browser_supported(args.app, build)
     if native_browser:
         # This verified build implements Page realtime with the normal browser socket.
         # Its Chromium proxy is checked by the launcher; no CDP injection is needed.

@@ -132,6 +132,18 @@ bin/launch-codex-proxied.sh --config "$CONFIG" --verify-current
 
 2026-10-20 的对照测试表明，原 relay 对 TLS 443 全量拦截时，未注入本地 CA 的客户端会遇到 `curl 60`；独立的 `--ignore-hosts '.*:443$'` relay 经系统证书验证正常。新装默认进行 TLS 透传，使用系统 CA，既不修改 ChatGPT 官方应用，也不向 macOS 全局证书库加证书。网络质量与上传业务还必须分别验证。
 
+## 6.3 2026-10-22 桌面端构建 21421 适配
+
+ChatGPT 26.1016.61520 / build 21421 的 app.asar 已核验：Pages realtime 使用 Chromium 原生 new WebSocket(a.toString(),o)，并包含 pages-realtime-room. 子协议。对应资源为 webview/assets/app-initial-c95ddb62696e.js，SHA-256 为 6f063d287dbd012293d866f6578bc2703ab11d75b53a00273c45e36df32ce75c。启动器按 build ID、资源路径、完整 SHA-256 和关键调用特征共同验证；不把未知 build 简单加入白名单，也不向该 renderer 注入旧版 Node adapter。
+
+更新代理后先运行：
+
+    bin/launch-codex-proxied.sh --config "$CONFIG" --preflight
+    bin/launch-codex-proxied.sh --config "$CONFIG" --launch-and-verify
+    bin/launch-codex-proxied.sh --config "$CONFIG" --verify-current
+
+看到 native Chromium Page WebSocket call site verified for build 21421 只代表资源指纹与代理进程边界已验证；它不等于已登录 Page 文档成功打开。仍需进行真实页面打开/编辑验收。后续 ChatGPT 更新若再次更换 build 或资源指纹，保持 fail-closed，先检查新 app.asar 的具体实现与内容哈希。
+
 ## 7. Remote 离线、图片失败或业务结果不一致
 
 Remote 和图片必须由真实业务操作验证，例如在目标工作区中实际建立 Remote 连接、发送一条业务消息并上传/加载一张图片。脚本的 HTTP/WebSocket 探针只能证明 transport surface 到达，不能证明账号、工作区、权限、图片处理或服务端状态。

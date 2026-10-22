@@ -4,6 +4,10 @@
 
 English summary: Codex Proxy is an unofficial macOS utility. Chromium/WebView traffic from the explicitly launched ChatGPT app uses the configured HTTP(S) upstream directly via `--proxy-server`. Bundled Codex CLI/app-server traffic uses the loopback relay (default `127.0.0.1:29759`) and then the same upstream. Current Space/Pages compatibility also forces the app-supported CLI transport for the durable host, avoiding an otherwise direct cloud WebSocket.
 
+## Antigravity 接入
+
+Antigravity 可复用本项目现有的上游代理和本机 relay。部署及验收步骤见 [docs/ANTIGRAVITY_PROXY.md](docs/ANTIGRAVITY_PROXY.md)。请使用专用的 **Antigravity Proxy.app** 或 `bin/launch-antigravity-proxied.sh` 启动；直接打开原始 Antigravity.app 不会自动继承本项目的进程级代理环境。
+
 > 本项目是社区维护的非官方 macOS 工具，不是 OpenAI、ChatGPT 或 Codex 的官方组件。相关名称和商标归各自权利人所有。
 
 ## 用途与边界

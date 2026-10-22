@@ -2,7 +2,7 @@
 
 ## Target
 
-- Host: Hermes-1.local (macOS)
+- Host: dedicated macOS deployment machine
 - ChatGPT app: 26.1016.61520, CFBundleVersion=21421
 - Repository: kumaxs/codex-proxy
 - Deployed main commit: f04befb

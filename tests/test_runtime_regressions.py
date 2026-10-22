@@ -1,12 +1,14 @@
 """Guard live relay startup and process verification against observed regressions."""
 import pathlib
-import re
 import subprocess
 import unittest
 
 ROOT = pathlib.Path(__file__).parents[1]
 RELAY = (ROOT / "bin/start-relay.sh").read_text()
 LAUNCHER = (ROOT / "bin/launch-codex-proxied.sh").read_text()
+ANTIGRAVITY_LAUNCHER = (ROOT / "bin/launch-antigravity-proxied.sh").read_text()
+ANTIGRAVITY_APP = (ROOT / "app/Antigravity-Proxy.js").read_text()
+ANTIGRAVITY_BUILDER = (ROOT / "scripts/build-antigravity-app.sh").read_text()
 
 
 class RelayRegressionTests(unittest.TestCase):
@@ -42,6 +44,41 @@ class RelayRegressionTests(unittest.TestCase):
             LAUNCHER,
         )
         self.assertNotIn("env_value", LAUNCHER)
+
+
+class AntigravityProxyRegressionTests(unittest.TestCase):
+    def test_launcher_routes_browser_and_node_background_traffic(self):
+        self.assertIn('"--proxy-server=$UPSTREAM_URL"', ANTIGRAVITY_LAUNCHER)
+        self.assertIn('HTTP_PROXY="$RELAY_URL"', ANTIGRAVITY_LAUNCHER)
+        self.assertIn('HTTPS_PROXY="$RELAY_URL"', ANTIGRAVITY_LAUNCHER)
+        self.assertIn("NODE_USE_ENV_PROXY=1", ANTIGRAVITY_LAUNCHER)
+        self.assertIn('NODE_EXTRA_CA_CERTS="$RELAY_CA"', ANTIGRAVITY_LAUNCHER)
+        self.assertIn('NO_PROXY="$NO_PROXY_VALUE"', ANTIGRAVITY_LAUNCHER)
+
+    def test_launcher_fails_closed_if_proxy_or_app_is_unavailable(self):
+        self.assertIn("check_listeners || exit 1", ANTIGRAVITY_LAUNCHER)
+        self.assertIn("if is_running; then", ANTIGRAVITY_LAUNCHER)
+        self.assertIn('[[ -x "$APP_EXECUTABLE" ]]', ANTIGRAVITY_LAUNCHER)
+        self.assertIn("--status", ANTIGRAVITY_LAUNCHER)
+
+    def test_antigravity_launcher_has_valid_zsh_syntax(self):
+        subprocess.run(
+            ["/bin/zsh", "-n", str(ROOT / "bin/launch-antigravity-proxied.sh")],
+            capture_output=True, text=True, check=True,
+        )
+
+    def test_gui_wrapper_enables_shell_runner_and_pins_runtime_home(self):
+        self.assertIn("shellRunner.includeStandardAdditions = true", ANTIGRAVITY_APP)
+        self.assertIn("CODEX_PROXY_HOME=", ANTIGRAVITY_APP)
+        self.assertIn("launch-antigravity-proxied.sh", ANTIGRAVITY_APP)
+
+    def test_app_builder_syntax_and_replace_rollback_are_present(self):
+        subprocess.run(
+            ["/bin/zsh", "-n", str(ROOT / "scripts/build-antigravity-app.sh")],
+            capture_output=True, text=True, check=True,
+        )
+        self.assertIn("--replace", ANTIGRAVITY_BUILDER)
+        self.assertIn("failed to restore the previous app bundle", ANTIGRAVITY_BUILDER)
 
 
 if __name__ == "__main__":

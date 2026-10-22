@@ -95,7 +95,7 @@ collect_scannable_sources() {
   local relative_file
   local ext
 
-  repo_files=("${(@f)$(find "$PROJECT_ROOT" -type f 2>/dev/null)}")
+  repo_files=("${(@f)$(git -C "$PROJECT_ROOT" ls-files --cached --others --exclude-standard 2>/dev/null)}")
 
   for file in "${repo_files[@]}"; do
     ext="${file:e}"

@@ -42,10 +42,10 @@ The official ChatGPT application bundle was not modified or re-signed. The exist
 | Real ordinary chat | PASS | Sent CodexProxy Chat transport test. Reply with exactly: OK.; app returned OK |
 | Real image upload and visual understanding | PASS | Uploaded a generated 96×64 gradient image; app returned IMAGE_OK after being asked to inspect it |
 | Existing conversation load | RECOVERED | An initial conversation fetch returned HTTP 429 (Too many requests); the conversation subsequently rendered after retry. Treat this as a transient upstream/API response, not proof of a proxy transport defect |
-| Native Page/Space document open on build 21421 | NOT YET LIVE-ACCEPTED | The installed bundle's exact fingerprint and native WebSocket call site were verified, but an authenticated Space Page document was not opened in this acceptance session. Do not equate fingerprint verification with full Page business acceptance |
+| Space open on build 21421 | PASS (user-confirmed) | After deployment, the user independently confirmed that Space opens successfully in the updated ChatGPT app. Individual Page editing was not separately reported as tested |
 
 ## Current conclusion
 
-The updated runtime is deployed, the relay is healthy, ordinary chat works, and image upload plus model access to the uploaded image work on ChatGPT build 21421. Repository tests and the stable launcher environment checks pass.
+The updated runtime is deployed, the relay is healthy, ordinary chat works, image upload plus model access to the uploaded image work, and the user independently confirmed that Space opens successfully on ChatGPT build 21421. Repository tests and the stable launcher environment checks pass.
 
-**Acceptance is not claimed as complete for Space/Page documents.** Build 21421 uses Chromium's native WebSocket and is correctly allowlisted by exact asset fingerprint, but the final authenticated Page open/edit smoke test remains outstanding. If Page/Space document access is part of the required release gate, keep that item open until a real document is opened and observed without a connection/open error. A fresh upstream 429 should be distinguished from proxy failures and rechecked after the rate limit clears.
+The Space-open acceptance item is closed based on the user's real-app verification. Individual Page editing was not separately reported as tested. A transient HTTP 429 was observed during an earlier conversation fetch and recovered on retry; if it recurs, distinguish the upstream rate-limit response from proxy transport failures.

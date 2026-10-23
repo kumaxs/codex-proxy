@@ -157,12 +157,10 @@ function launchAction(argv) {
 function executeAction(action) {
   try {
     if (action === 'launch') {
-      const result = performLaunch()
-      if (result) {
-        showMessage(result)
-      }
-      // A modal status dialog takes focus from ChatGPT. Bring ChatGPT forward
-      // only after that dialog closes, including when the user cancels a restart.
+      // Do not display launcher stdout as a modal success dialog. On a normal
+      // click, start/verify the proxied app and bring ChatGPT directly forward.
+      // If a restart confirmation was canceled, still foreground existing ChatGPT.
+      performLaunch()
       try {
         Application(launcherBundleId).activate()
       } catch (e) {

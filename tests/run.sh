@@ -391,9 +391,10 @@ run_build_suite() {
       ! /usr/bin/grep -Fq "return 'launch'" "$PROJECT_ROOT/app/Codex-Proxy.js" ||
       ! /usr/bin/grep -Fq 'const args = Array.isArray(argv) ? argv : []' "$decompiled" ||
       ! /usr/bin/grep -Fq "if (first === '--help' || first === 'help')" "$decompiled" ||
-      ! /usr/bin/grep -Fq 'A modal status dialog takes focus from ChatGPT.' "$PROJECT_ROOT/app/Codex-Proxy.js" ||
-      ! /usr/bin/grep -Fq 'A modal status dialog takes focus from ChatGPT.' "$decompiled"; then
-    print_fail "scripts/build-app normalizes Finder arguments and restores ChatGPT focus"
+      ! /usr/bin/grep -Fq 'Do not display launcher stdout as a modal success dialog.' "$PROJECT_ROOT/app/Codex-Proxy.js" ||
+      ! /usr/bin/grep -Fq 'Do not display launcher stdout as a modal success dialog.' "$decompiled" ||
+      /usr/bin/grep -Fq 'showMessage(result)' "$PROJECT_ROOT/app/Codex-Proxy.js"; then
+    print_fail "scripts/build-app normalizes Finder arguments and foregrounds ChatGPT without a success popup"
     return 1
   fi
 

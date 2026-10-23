@@ -378,6 +378,15 @@ run_build_suite() {
     return 1
   fi
 
+  if ! /usr/bin/grep -Fq 'const ui = shellRunner' "$PROJECT_ROOT/app/Codex-Proxy.js"; then
+    print_fail "scripts/build-app shares the Standard Additions application object"
+    return 1
+  fi
+  if ! /usr/bin/grep -Fq 'const ui = shellRunner' "$decompiled"; then
+    print_fail "scripts/build-app preserves the shared Standard Additions application object"
+    return 1
+  fi
+
   /bin/cat > "$expected_tokens_file" <<EOF_TOKENS
 launch-codex-proxied.sh
 getProcessState

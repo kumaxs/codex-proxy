@@ -1,7 +1,7 @@
 ObjC.import('Foundation')
 
 const shellRunner = Application.currentApplication()
-const ui = Application.currentApplication()
+const ui = shellRunner
 ui.includeStandardAdditions = true
 
 const runtimeHome = ObjC.unwrap($.NSHomeDirectory()) + '/Library/Application Support/Codex Proxy'

@@ -91,7 +91,12 @@ function resolveAction(argv) {
   if (first === '--rotate-log' || first === 'rotate') {
     return 'rotate'
   }
-  return 'help'
+  if (first === '--help' || first === 'help') {
+    return 'help'
+  }
+  // Finder/LaunchServices can supply an invocation argument that is not one
+  // of our documented actions. Treat those as a normal click, not the help UI.
+  return 'launch'
 }
 
 function getProcessState() {

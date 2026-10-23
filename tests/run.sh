@@ -386,6 +386,12 @@ run_build_suite() {
     print_fail "scripts/build-app preserves the shared Standard Additions application object"
     return 1
   fi
+  if ! /usr/bin/grep -Fq "if (first === '--help' || first === 'help')" "$PROJECT_ROOT/app/Codex-Proxy.js" ||
+      ! /usr/bin/grep -Fq "return 'launch'" "$PROJECT_ROOT/app/Codex-Proxy.js" ||
+      ! /usr/bin/grep -Fq "if (first === '--help' || first === 'help')" "$decompiled"; then
+    print_fail "scripts/build-app defaults unknown applet arguments to launch"
+    return 1
+  fi
 
   /bin/cat > "$expected_tokens_file" <<EOF_TOKENS
 launch-codex-proxied.sh

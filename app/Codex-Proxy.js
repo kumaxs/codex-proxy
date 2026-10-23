@@ -147,13 +147,7 @@ function performLaunch() {
     }
   }
 
-  const result = runLauncherCommand(['--launch-and-verify'])
-  try {
-    Application(launcherBundleId).activate()
-  } catch (e) {
-    // activate is best-effort only.
-  }
-  return result
+  return runLauncherCommand(['--launch-and-verify'])
 }
 
 function launchAction(argv) {
@@ -166,6 +160,13 @@ function executeAction(action) {
       const result = performLaunch()
       if (result) {
         showMessage(result)
+      }
+      // A modal status dialog takes focus from ChatGPT. Bring ChatGPT forward
+      // only after that dialog closes, including when the user cancels a restart.
+      try {
+        Application(launcherBundleId).activate()
+      } catch (e) {
+        // activate is best-effort only.
       }
       return
     }

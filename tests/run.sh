@@ -390,8 +390,10 @@ run_build_suite() {
       ! /usr/bin/grep -Fq "if (first === '--help' || first === 'help')" "$PROJECT_ROOT/app/Codex-Proxy.js" ||
       ! /usr/bin/grep -Fq "return 'launch'" "$PROJECT_ROOT/app/Codex-Proxy.js" ||
       ! /usr/bin/grep -Fq 'const args = Array.isArray(argv) ? argv : []' "$decompiled" ||
-      ! /usr/bin/grep -Fq "if (first === '--help' || first === 'help')" "$decompiled"; then
-    print_fail "scripts/build-app normalizes Finder arguments and defaults to launch"
+      ! /usr/bin/grep -Fq "if (first === '--help' || first === 'help')" "$decompiled" ||
+      ! /usr/bin/grep -Fq 'A modal status dialog takes focus from ChatGPT.' "$PROJECT_ROOT/app/Codex-Proxy.js" ||
+      ! /usr/bin/grep -Fq 'A modal status dialog takes focus from ChatGPT.' "$decompiled"; then
+    print_fail "scripts/build-app normalizes Finder arguments and restores ChatGPT focus"
     return 1
   fi
 

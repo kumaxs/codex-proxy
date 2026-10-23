@@ -69,10 +69,13 @@ function confirmDangerous(message) {
 }
 
 function resolveAction(argv) {
-  if (!argv || argv.length === 0) {
+  // JXA applets may pass a plain object for Finder launches rather than an
+  // actual JavaScript array. Normalize that to the no-argument click path.
+  const args = Array.isArray(argv) ? argv : []
+  if (args.length === 0) {
     return 'launch'
   }
-  const first = String(argv[0]).toLowerCase()
+  const first = String(args[0]).toLowerCase()
   if (first === 'launch' || first === '--launch' || first === '--launch-and-verify' || first === 'start') {
     return 'launch'
   }

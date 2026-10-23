@@ -386,10 +386,12 @@ run_build_suite() {
     print_fail "scripts/build-app preserves the shared Standard Additions application object"
     return 1
   fi
-  if ! /usr/bin/grep -Fq "if (first === '--help' || first === 'help')" "$PROJECT_ROOT/app/Codex-Proxy.js" ||
+  if ! /usr/bin/grep -Fq 'const args = Array.isArray(argv) ? argv : []' "$PROJECT_ROOT/app/Codex-Proxy.js" ||
+      ! /usr/bin/grep -Fq "if (first === '--help' || first === 'help')" "$PROJECT_ROOT/app/Codex-Proxy.js" ||
       ! /usr/bin/grep -Fq "return 'launch'" "$PROJECT_ROOT/app/Codex-Proxy.js" ||
+      ! /usr/bin/grep -Fq 'const args = Array.isArray(argv) ? argv : []' "$decompiled" ||
       ! /usr/bin/grep -Fq "if (first === '--help' || first === 'help')" "$decompiled"; then
-    print_fail "scripts/build-app defaults unknown applet arguments to launch"
+    print_fail "scripts/build-app normalizes Finder arguments and defaults to launch"
     return 1
   fi
 

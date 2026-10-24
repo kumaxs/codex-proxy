@@ -62,7 +62,7 @@ bin/proxy-health.sh --config "$CONFIG" --full
 
 `--full` 包括 bundled Codex `doctor --json --no-color` 和 `ws.chatgpt.com`、`chatgpt.com`、Remote-control endpoint 的 WebSocket upgrade 检查。HTTP 401/403/404 的未认证 WebSocket surface 仍可被分类为“已到达”；这不是业务登录成功。
 
-首次在新设备安装时，如果 doctor 明确报告没有 Codex 凭据，且 Responses WebSocket 仅因缺少 Authorization 报 HTTP 401，在其他检查正常并通过三个独立 WebSocket 端点探针后，允许打开应用完成登录。其他 doctor 失败（网络、权限、证书等）仍阻止启动。首次登录豁免不等于已验证登录后的实时连接或 Space 功能。
+首次在新设备安装时，如果 doctor 明确报告没有 Codex 凭据，且 Responses WebSocket 仅因缺少 Authorization 报 HTTP 401，在其他检查正常并通过三个独立 WebSocket 端点探针后，允许打开应用完成登录。唯一可忽略的附加网络告警是可选的桌面资源 CDN 请求超时，前提是 doctor 同时证明 ChatGPT 推理接口可达；推理接口不可达、其他网络/权限/证书错误仍必须拒绝启动。首次登录豁免不等于已验证登录后的实时连接或 Space 功能。
 
 另外可以运行网络审计：
 

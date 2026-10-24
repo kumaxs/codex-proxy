@@ -16,8 +16,27 @@ def websocket_ok(report):
     return report.get("overallStatus") not in ("failed", "error")
 
 
+def _first_login_provider_ok(checks):
+    """Optional desktop CDN timeouts must not block an otherwise reachable login."""
+    provider = checks.get("network.provider_reachability")
+    if not isinstance(provider, dict):
+        return False
+    if provider.get("status") == "ok":
+        return True
+    if (provider.get("status") != "warning"
+            or provider.get("summary") != "desktop update and runtime CDN is unreachable"):
+        return False
+    details = provider.get("details")
+    if not isinstance(details, dict):
+        return False
+    inference = details.get("ChatGPT inference URL")
+    cdn = details.get("desktop assets CDN")
+    return (isinstance(inference, str) and " reachable (HTTP " in inference
+            and isinstance(cdn, str) and cdn.endswith(" request timed out (optional)"))
+
+
 def first_login_ok(report):
-    """Allow only an unauthenticated 401, never a genuine network failure."""
+    """Allow only a missing-credential 401 with reachable inference and no hard failures."""
     if not isinstance(report, dict) or report.get("overallStatus") != "fail":
         return False
     checks = report.get("checks")
@@ -40,7 +59,7 @@ def first_login_ok(report):
         and details.get("auth mode") == "none"
         and "http 401 Unauthorized" in failure
         and "Missing bearer or basic authentication" in failure
-        and checks.get("network.provider_reachability", {}).get("status") == "ok"
+        and _first_login_provider_ok(checks)
         and checks.get("network.env", {}).get("status") == "ok"
         and all(
             isinstance(v, dict) and v.get("status") not in ("fail", "failed", "error")

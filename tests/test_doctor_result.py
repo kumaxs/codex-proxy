@@ -65,6 +65,34 @@ class DoctorSchemaTests(unittest.TestCase):
         report["checks"]["auth.credentials"]["summary"] = "token expired"
         self.assertFalse(module.first_login_ok(report))
 
+    def test_first_login_allows_only_optional_cdn_timeout_with_reachable_inference(self):
+        report = self.first_login_report()
+        report["checks"]["network.provider_reachability"] = {
+            "status": "warning",
+            "summary": "desktop update and runtime CDN is unreachable",
+            "details": {
+                "ChatGPT inference URL": "https://chatgpt.com/backend-api/<redacted> reachable (HTTP 405)",
+                "desktop assets CDN": "https://chatgpt.com/backend-api/<redacted> request timed out (optional)",
+            },
+        }
+        self.assertTrue(module.first_login_ok(report))
+
+        report["checks"]["network.provider_reachability"]["details"]["ChatGPT inference URL"] = "request timed out"
+        self.assertFalse(module.first_login_ok(report))
+
+        report["checks"]["network.provider_reachability"]["details"]["ChatGPT inference URL"] = "service reachable (HTTP 405)"
+        report["checks"]["network.provider_reachability"]["details"]["desktop assets CDN"] = "HTTP 503"
+        self.assertFalse(module.first_login_ok(report))
+
+        report["checks"]["network.provider_reachability"]["details"]["desktop assets CDN"] = "asset request timed out (optional)"
+        report["checks"]["network.provider_reachability"]["summary"] = "provider connection blocked"
+        self.assertFalse(module.first_login_ok(report))
+
+    def test_first_login_rejects_missing_provider_check(self):
+        report = self.first_login_report()
+        del report["checks"]["network.provider_reachability"]
+        self.assertFalse(module.first_login_ok(report))
+
     def test_unknown_schema_fails_closed(self):
         self.assertFalse(module.websocket_ok({"checks": []}))
         self.assertFalse(module.websocket_ok({"result": "HTTP 101"}))

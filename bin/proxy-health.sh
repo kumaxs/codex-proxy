@@ -258,12 +258,18 @@ set -e
 # Current Codex uses checks.network.websocket_reachability.status rather than
 # the legacy free-form handshake string. Exit status is still mandatory.
 doctor_ok=1
+first_login=0
 if (( doctor_rc == 0 )) && {
   /usr/bin/grep -Fq '"handshake result": "HTTP 101 Switching Protocols"' "$tmp_json" ||
   /usr/bin/python3 "$SCRIPT_DIR/../lib/doctor-result.py" "$tmp_json"
 }; then
   doctor_ok=0
   print "Codex doctor WebSocket reachability passed."
+elif (( doctor_rc == 1 )) &&
+     /usr/bin/python3 "$SCRIPT_DIR/../lib/doctor-result.py" --allow-first-login "$tmp_json"; then
+  doctor_ok=0
+  first_login=1
+  print -u2 "[WARN] First login: Codex credentials are absent; doctor reports an authentication-only HTTP 401. Checking independent WebSocket endpoints before allowing login."
 else
   print -u2 "Codex doctor WebSocket check failed or returned an unrecognized result (exit $doctor_rc)."
 fi
@@ -277,5 +283,9 @@ if (( doctor_ok != 0 || websocket_checks_ok != 0 )); then
   exit 2
 fi
 
-print "WebSocket reachability checks passed (http/https paths and remote-control tunnel endpoints)."
+if (( first_login == 1 )); then
+  print "[WARN] Unauthenticated endpoint probes passed; signed-in WebSocket and application features still require login validation."
+else
+  print "WebSocket reachability checks passed (http/https paths and remote-control tunnel endpoints)."
+fi
 exit 0

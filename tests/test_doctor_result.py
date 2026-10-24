@@ -27,6 +27,44 @@ class DoctorSchemaTests(unittest.TestCase):
                       "checks": {"network.websocket_reachability": {"status": "ok"}}}
             self.assertFalse(module.websocket_ok(report))
 
+    def first_login_report(self):
+        return {
+            "overallStatus": "fail",
+            "checks": {
+                "auth.credentials": {
+                    "status": "fail",
+                    "summary": "no Codex credentials were found",
+                },
+                "network.websocket_reachability": {
+                    "status": "warning",
+                    "details": {
+                        "auth mode": "none",
+                        "handshake transport error": "http 401 Unauthorized: Missing bearer or basic authentication in header",
+                    },
+                },
+                "network.provider_reachability": {"status": "ok"},
+                "network.env": {"status": "ok"},
+            },
+        }
+
+    def test_first_login_allows_only_unauthenticated_401(self):
+        self.assertTrue(module.first_login_ok(self.first_login_report()))
+        self.assertFalse(module.websocket_ok(self.first_login_report()))
+
+    def test_first_login_fails_closed_for_transport_or_other_failure(self):
+        report = self.first_login_report()
+        report["checks"]["network.websocket_reachability"]["details"]["handshake transport error"] = "connection refused"
+        self.assertFalse(module.first_login_ok(report))
+        report = self.first_login_report()
+        report["checks"]["network.provider_reachability"]["status"] = "warning"
+        self.assertFalse(module.first_login_ok(report))
+        report = self.first_login_report()
+        report["checks"]["security.endpoint"] = {"status": "fail"}
+        self.assertFalse(module.first_login_ok(report))
+        report = self.first_login_report()
+        report["checks"]["auth.credentials"]["summary"] = "token expired"
+        self.assertFalse(module.first_login_ok(report))
+
     def test_unknown_schema_fails_closed(self):
         self.assertFalse(module.websocket_ok({"checks": []}))
         self.assertFalse(module.websocket_ok({"result": "HTTP 101"}))

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate current Codex doctor WebSocket results without logging doctor JSON."""
+"""Validate Codex doctor WebSocket checks without logging sensitive doctor JSON."""
 import json
 import sys
 
@@ -16,14 +16,52 @@ def websocket_ok(report):
     return report.get("overallStatus") not in ("failed", "error")
 
 
+def first_login_ok(report):
+    """Allow only an unauthenticated 401, never a genuine network failure."""
+    if not isinstance(report, dict) or report.get("overallStatus") != "fail":
+        return False
+    checks = report.get("checks")
+    if not isinstance(checks, dict):
+        return False
+    auth = checks.get("auth.credentials")
+    ws = checks.get("network.websocket_reachability")
+    if not isinstance(auth, dict) or not isinstance(ws, dict):
+        return False
+    details = ws.get("details")
+    if not isinstance(details, dict):
+        return False
+    failure = details.get("handshake transport error")
+    if not isinstance(failure, str):
+        return False
+    return (
+        auth.get("status") == "fail"
+        and auth.get("summary") == "no Codex credentials were found"
+        and ws.get("status") == "warning"
+        and details.get("auth mode") == "none"
+        and "http 401 Unauthorized" in failure
+        and "Missing bearer or basic authentication" in failure
+        and checks.get("network.provider_reachability", {}).get("status") == "ok"
+        and checks.get("network.env", {}).get("status") == "ok"
+        and all(
+            isinstance(v, dict) and v.get("status") not in ("fail", "failed", "error")
+            for key, v in checks.items() if key != "auth.credentials"
+        )
+    )
+
+
 def main():
-    if len(sys.argv) != 2:
+    if len(sys.argv) == 2:
+        mode, path = "normal", sys.argv[1]
+    elif len(sys.argv) == 3 and sys.argv[1] == "--allow-first-login":
+        mode, path = "first_login", sys.argv[2]
+    else:
         return 2
     try:
-        with open(sys.argv[1], encoding="utf-8") as stream:
+        with open(path, encoding="utf-8") as stream:
             report = json.load(stream)
-        return 0 if websocket_ok(report) else 1
-    except (OSError, ValueError, TypeError):
+        valid = first_login_ok(report) if mode == "first_login" else websocket_ok(report)
+        return 0 if valid else 1
+    except (OSError, ValueError, TypeError, AttributeError):
         return 1
 
 

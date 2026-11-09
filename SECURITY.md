@@ -14,9 +14,9 @@ English summary: This project is an unofficial macOS MITM relay. The relay can s
 
 relay 的 LaunchAgent 可以 `KeepAlive=true`，但 ChatGPT/Codex 不会被安装为 KeepAlive 服务，也没有自动重启。若 relay 或 upstream 失败，launcher 不会主动另行普通启动，而是保留失败路径并报告错误；GUI/Chromium 等子进程的环境继承仍需业务验证。
 
-launcher 的 postflight 只对 ChatGPT 主进程和 Codex app-server 做环境检查，并采样已建立的 TCP socket。它不会检查 UDP/QUIC，也不会证明所有 GUI/Chromium helper 或未来新增传输都经过 relay；这是一项诊断门禁，不是全进程网络沙箱。
+launcher 的 postflight 只对 ChatGPT 主进程和 Codex app-server 做环境检查，并采样已建立的 TCP socket。它不会检查 UDP/QUIC，也不会证明所有 GUI/Chromium helper 或未来新增传输都经过 relay；这是辅助诊断，不是全进程网络沙箱，也不是正常启动的强制门禁。
 
-若 ChatGPT 已启动但 postflight 失败，launcher 返回错误，却不会在未获用户确认时自动 TERM。失败实例可能继续处于未验证状态；请立即手动退出，再检查 relay、配置和日志。该选择避免守护式重启或误杀，但意味着命令失败本身不会停止所有潜在流量。
+若 ChatGPT 已启动但 postflight 无法确认覆盖，launcher 记录告警并继续使用原有显式代理配置，不自动 TERM 或改为 direct launch。需要排障时可手动执行 `verify`/`preflight`；如果确实发现直连流量，应退出客户端并修复代理，而不能把告警当作代理验证成功。
 
 ## 本地文件与权限
 

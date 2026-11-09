@@ -169,9 +169,9 @@ bin/launch-codex-proxied.sh --config "$CONFIG" --launch-and-verify
 
 默认 443 TLS 透传不进行 HTTPS 解密；若用户明确覆盖 PASSTHROUGH_REGEX 以启用 TLS interception，relay 的本地 CA 会重新签发被拦截的 HTTPS，因此 relay 进程及其运行目录对**经过拦截的明文**具有可见性；这包括可能的会话内容、Remote 控制流量或图片请求元数据。请只在你有权审计的设备和网络中运行，不要把 runtime CA 发给他人。
 
-launcher 会验证 ChatGPT 主进程的 `--proxy-server` 参数、Chromium NetworkService 到 configured upstream 的实际 socket，并要求主进程具有 `CODEX_APP_SERVER_FORCE_CLI=1`。新版可能同时生成多个 direct-child Codex app-server；launcher 会逐个验证其身份和代理环境，并拒绝观察到的 direct-upstream / external-443 绕行。进程生命周期只管理当前 ChatGPT 主进程的后代；独立长期 daemon 持有的 bundle helper 不会阻塞 GUI 重启。
+launcher 会验证 ChatGPT 主进程的 `--proxy-server` 参数、Chromium NetworkService 到 configured upstream 的实际 socket，并检查主进程的 `CODEX_APP_SERVER_FORCE_CLI=1` 及 direct-child app-server 代理环境。正常启动只执行必要的代理准备，完整 HTTPS/WebSocket 诊断可手动运行 `preflight`（可能较慢，失败不妨碍正常启动）；不会尝试无代理直连回退。进程生命周期只管理当前 ChatGPT 主进程的后代；独立长期 daemon 持有的 bundle helper 不会阻塞 GUI 重启。
 
-如果进程已经启动、但 postflight 随后失败，launcher 会返回非零并明确提示“状态未验证”；为避免再次出现自动终止/重启循环，它不会擅自发送 TERM。此时应用可能仍在运行，必须由用户手动退出后再重试；“没有 direct-launch fallback”不等于对残留进程实施了网络沙箱。
+如果客户端已经启动，但 postflight 诊断未能完全确认代理覆盖，launcher 只记录告警并保留已启动的客户端，不发送 TERM，也不会切换为无代理直连。可通过 `verify` 或 `status` 查看情况；更新后 Pages 适配未验证时也仅告警，不阻断普通使用。
 
 本项目不把 CA 写入系统钥匙串，也不修改系统信任库。GUI/Chromium/WebView 直接使用 configured upstream；bundled CLI/app-server 使用 `HTTP_PROXY`/`HTTPS_PROXY` 经本机 relay 转发。relay 对标准 TLS/WSS `:443` 保留源站证书，避免 Rust/CLI WebSocket 因本地 MITM CA 产生 `UnknownIssuer`。新版 app-server 可能移除 `NODE_EXTRA_CA_CERTS`，因此只对该角色放宽这一项。
 

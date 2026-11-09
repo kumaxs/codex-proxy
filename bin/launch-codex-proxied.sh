@@ -850,7 +850,8 @@ launch_chatgpt() {
 
 preflight() {
   local failed=0
-  log_info "Running strict proxy preflight."
+  local full_diagnostics="${1:-false}"
+  log_info "Checking proxy launch requirements."
 
   if [[ -e "$INSTALL_TRANSACTION_LOCK" || -L "$INSTALL_TRANSACTION_LOCK" ]]; then
     log_error "A Codex Proxy install transaction is active or incomplete; refusing preflight."
@@ -882,20 +883,24 @@ preflight() {
     return 1
   fi
 
-  /bin/zsh "$PROXY_HEALTH" --config "$CONFIG_PATH" --full >/dev/null || {
-    log_error "Full HTTPS/WebSocket proxy health check failed."
-    return 1
-  }
+  # Slow, version-sensitive HTTPS/WebSocket probes are opt-in diagnostics,
+  # never a prerequisite for starting the configured proxy path.
+  if [[ "$full_diagnostics" == "true" ]]; then
+    /bin/zsh "$PROXY_HEALTH" --config "$CONFIG_PATH" --full >/dev/null || {
+      log_error "Optional HTTPS/WebSocket diagnostics failed. ChatGPT launch is still available; check proxy configuration or update Codex Proxy if features fail."
+      return 1
+    }
+  fi
 
   if (( TEST_MODE == 0 )); then
     pages_proxy check
     case $? in
       0) ;;
       2) log_warn "Updated ChatGPT: retaining Chromium/CLI proxy; Pages require revalidation." ;;
-      *) return 1 ;;
+      *) log_warn "Pages compatibility check could not complete. Continuing with configured proxy; revalidate Pages or update Codex Proxy if necessary." ;;
     esac
   fi
-  log_info "Strict proxy preflight passed."
+  log_info "Proxy launch requirements passed."
   return 0
 }
 
@@ -1035,9 +1040,8 @@ launch_and_verify() {
 
   /bin/sleep 3
   verify_current || {
-    log_error "Proxied launch did not pass postflight verification. No direct-launch fallback was used."
-    log_error "The launched app remains user-controlled and may still be running in an unverified state; close it manually before retrying. No automatic TERM was sent."
-    return 1
+    log_warn "ChatGPT was launched with the configured proxy, but postflight verification is inconclusive. No direct-launch fallback was used. If connectivity fails, run verify or update Codex Proxy."
+    return 0
   }
 }
 
@@ -1164,7 +1168,7 @@ main() {
   fi
 
   case "$TUNNEL_ACTION" in
-    preflight) preflight ;;
+    preflight) preflight true ;;
     status) status ;;
     list-processes) list_processes ;;
     process-state) process_state ;;

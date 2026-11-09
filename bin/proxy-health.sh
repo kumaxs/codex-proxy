@@ -276,7 +276,8 @@ fi
 
 websocket_checks_ok=0
 if ! probe_websocket_upgrade "ws.chatgpt.com" "https://ws.chatgpt.com/" ; then websocket_checks_ok=1; fi
-if ! probe_websocket_upgrade "chatgpt.com root" "https://chatgpt.com/" ; then websocket_checks_ok=1; fi
+# The homepage is an HTTPS document, not a required WebSocket endpoint.
+# Its normal HTTP 200 response must not fail the WebSocket diagnostic.
 if ! probe_websocket_upgrade "remote-control" "https://chatgpt.com/backend-api/wham/remote/control/server" ; then websocket_checks_ok=1; fi
 
 if (( doctor_ok != 0 || websocket_checks_ok != 0 )); then

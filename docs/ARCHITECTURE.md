@@ -65,8 +65,8 @@ no_proxy=localhost,127.0.0.1,::1
 - `scripts/install.sh` 默认 `--no-start`，只安装 runtime、应用和 plist，不改变 launchd 中已有 job。
 - 使用 `--start`，或随后执行 `bin/start-relay.sh --config <绝对路径>`，才会改变 relay job。`start-relay.sh` 对未加载的精确 plist 执行 bootstrap；对已加载且 listener/PID/launchd path 身份匹配的 job 执行受控 kickstart，从而应用当前配置。因为 kickstart 会重启 relay，ChatGPT/Codex 仍运行时该动作会被拒绝。未知 listener 一律拒绝，不会被杀掉。
 - plist 的 `KeepAlive=true` 只维持 `relay.sh`；ChatGPT/Codex 没有 KeepAlive、自动循环重启或“看门狗”。
-- `launch-codex-proxied.sh` 在启动前后检查 upstream、relay listener、进程身份、主进程 `--proxy-server`、Chromium NetworkService→configured upstream、durable CLI 回退环境和 direct-child Codex app-server 代理边界；失败时会报告错误并拒绝 direct-launch fallback。
-- 若 postflight 在应用已经启动后失败，脚本不会未经确认自动 TERM；失败实例可能仍运行且状态未验证，用户必须手动退出后再诊断。
+- `launch-codex-proxied.sh` 在正常启动时只要求 upstream/relay 与本机配置可用；较慢的 HTTPS/WebSocket 诊断移至手动 `--preflight`。启动后的进程与网络覆盖检查如不完整，仅告警并保留显式代理，不尝试 direct-launch fallback。
+- postflight 无法确认覆盖时不会自动 TERM 或返回启动失败；可手动 `--verify-current` 诊断，真实直连问题仍需修复。
 - `launch-codex-proxied.sh` 的 direct-launch fallback 仅指它不会在校验失败后主动再做一次普通启动；GUI/Chromium 等子进程是否遵守环境变量，仍需按业务验证。
 - relay/upstream 不可用时保留 launcher 失败路径；不能仅凭主进程和 app-server 检查推断所有 GUI/Chromium 流量都经过 relay。
 

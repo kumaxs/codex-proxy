@@ -36,7 +36,8 @@ function runLauncherCommand(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     commandParts.push(argv[i])
   }
-  return runShellScript(commandParts.map(shellQuote).join(' '))
+  // Preserve non-fatal launcher warnings so the GUI can show a notification.
+  return runShellScript(commandParts.map(shellQuote).join(' ') + ' 2>&1')
 }
 
 function trimValue(value) {
@@ -160,7 +161,15 @@ function executeAction(action) {
       // Do not display launcher stdout as a modal success dialog. On a normal
       // click, start/verify the proxied app and bring ChatGPT directly forward.
       // If a restart confirmation was canceled, still foreground existing ChatGPT.
-      performLaunch()
+      const launchOutput = performLaunch()
+      const warnings = String(launchOutput || '').split('\n').filter(line => line.startsWith('[WARN]'))
+      if (warnings.length > 0) {
+        try {
+          ui.displayNotification(warnings[0].slice(7), { withTitle: 'Codex Proxy — 已启动，存在兼容性提示' })
+        } catch (e) {
+          // Notifications may be disabled; launching must still succeed.
+        }
+      }
       try {
         Application(launcherBundleId).activate()
       } catch (e) {
